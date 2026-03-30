@@ -1,0 +1,32 @@
+[package]
+authors = ["Takahiro Sato <harehare1110@gmail.com>"]
+description = "Browser-based Markdown viewer with mq query support"
+edition = "2024"
+keywords = ["markdown", "viewer", "server", "mq"]
+license = "MIT"
+name = "mq-serve"
+readme = "README.md"
+repository = "https://github.com/harehare/mq-serve"
+version = "0.1.0"
+
+[[bin]]
+name = "mq-serve"
+path = "src/main.rs"
+
+[dependencies]
+axum = {version = "0.8", features = ["ws"]}
+clap = {version = "4", features = ["derive"]}
+ignore = "0.4"
+miette = "7"
+mime_guess = "2"
+mq-lang = "0.5.24"
+mq-markdown = "0.5.24"
+notify = "8"
+open = "5"
+rust-embed = "8"
+serde = {version = "1", features = ["derive"]}
+serde_json = "1"
+tokio = {version = "1", features = ["full"]}
+tower-http = {version = "0.6", features = ["cors"]}
+tracing = "0.1"
+tracing-subscriber = {version = "0.3", features = ["env-filter", "fmt"]}

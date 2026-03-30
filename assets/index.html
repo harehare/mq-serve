@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>mq-serve</title>
+  <link rel="stylesheet" href="/assets/bundle.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #ffffff;
+      --surface: #f6f8fa;
+      --border: #d0d7de;
+      --text: #1f2328;
+      --text-muted: #656d76;
+      --accent: #0969da;
+      --sidebar-w: 260px;
+      --query-h: 48px;
+      --font-mono: ui-monospace, SFMono-Regular, SF Mono, Menlo, Consolas, monospace;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0d1117;
+        --surface: #161b22;
+        --border: #30363d;
+        --text: #e6edf3;
+        --text-muted: #7d8590;
+        --accent: #58a6ff;
+      }
+      /* hljs dark override */
+      .hljs { background: #161b22 !important; color: #e6edf3; }
+    }
+
+    html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+
+    /* ── Layout ── */
+    #app { display: grid; grid-template-rows: var(--query-h) 1fr; grid-template-columns: var(--sidebar-w) 1fr; height: 100vh; }
+
+    /* ── Query bar ── */
+    #querybar {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+    }
+    #querybar label { font-size: 12px; color: var(--text-muted); white-space: nowrap; font-family: var(--font-mono); }
+    #queryInput {
+      flex: 1;
+      font-family: var(--font-mono);
+      font-size: 13px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+    }
+    #queryInput:focus { border-color: var(--accent); }
+    .bar-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 10px;
+      font-size: 13px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: var(--bg);
+      color: var(--text);
+      white-space: nowrap;
+      gap: 4px;
+    }
+    .bar-btn:hover { background: var(--surface); }
+    #queryError { font-size: 12px; color: #cf222e; white-space: nowrap; max-width: 300px; overflow: hidden; text-overflow: ellipsis; }
+    #status { font-size: 11px; color: var(--text-muted); margin-left: auto; white-space: nowrap; }
+    #status.connected::before { content: "●"; color: #3fb950; margin-right: 4px; }
+    #status.disconnected::before { content: "●"; color: #f85149; margin-right: 4px; }
+
+    /* ── Sidebar ── */
+    #sidebar {
+      grid-row: 2;
+      display: flex;
+      flex-direction: column;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    #sidebarHeader {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 8px 10px 6px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    #searchInput {
+      flex: 1;
+      font-size: 12px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text);
+      outline: none;
+      min-width: 0;
+    }
+    #searchInput:focus { border-color: var(--accent); }
+    #viewToggleBtn {
+      flex-shrink: 0;
+      width: 28px;
+      height: 28px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--text-muted);
+      cursor: pointer;
+    }
+    #viewToggleBtn:hover { background: var(--surface); color: var(--text); }
+    #viewToggleBtn.active { border-color: var(--accent); color: var(--accent); }
+
+    #fileList { list-style: none; overflow-y: auto; flex: 1; }
+    #fileList li.file-item > a {
+      display: block;
+      padding: 5px 12px;
+      font-size: 13px;
+      color: var(--text);
+      text-decoration: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      border-left: 3px solid transparent;
+    }
+    #fileList li.file-item > a:hover { background: var(--bg); }
+    #fileList li.file-item > a.active { border-left-color: var(--accent); color: var(--accent); background: var(--bg); font-weight: 500; }
+
+    /* ── Tree ── */
+    .tree-dir { list-style: none; }
+    .tree-dir-label { display: flex; align-items: center; gap: 4px; padding: 5px 12px; font-size: 12px; font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
+    .tree-dir-label:hover { background: var(--bg); }
+    .tree-arrow { font-size: 10px; transition: transform 0.15s; display: inline-block; width: 10px; }
+    .tree-dir.collapsed > .tree-children { display: none; }
+    .tree-dir.collapsed .tree-arrow { transform: rotate(-90deg); }
+    .tree-children { list-style: none; }
+    .tree-children .file-item > a { padding-left: 28px; }
+    .tree-children .tree-children .file-item > a { padding-left: 44px; }
+    .tree-children .tree-children .tree-children .file-item > a { padding-left: 60px; }
+    .tree-children .tree-dir-label { padding-left: 20px; }
+    .tree-children .tree-children .tree-dir-label { padding-left: 36px; }
+
+    /* ── Preview ── */
+    #previewWrap { grid-row: 2; display: flex; flex-direction: column; overflow: hidden; }
+    #previewToolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 6px 12px;
+      border-bottom: 1px solid var(--border);
+      background: var(--surface);
+      flex-shrink: 0;
+    }
+    #copyBtn.copied { color: #3fb950; border-color: #3fb950; }
+    #preview { overflow-y: auto; padding: 32px 40px; max-width: 900px; flex: 1; }
+
+    /* ── Markdown ── */
+    #preview h1, #preview h2, #preview h3, #preview h4, #preview h5, #preview h6 { margin-top: 24px; margin-bottom: 12px; font-weight: 600; line-height: 1.25; padding-bottom: 4px; }
+    #preview h1 { font-size: 2em; border-bottom: 1px solid var(--border); }
+    #preview h2 { font-size: 1.5em; border-bottom: 1px solid var(--border); }
+    #preview p { margin-bottom: 16px; line-height: 1.7; }
+    #preview a { color: var(--accent); text-decoration: none; }
+    #preview a:hover { text-decoration: underline; }
+    #preview ul, #preview ol { padding-left: 2em; margin-bottom: 16px; }
+    #preview li { margin-bottom: 4px; line-height: 1.6; }
+    #preview blockquote { margin: 0 0 16px; padding: 4px 16px; border-left: 4px solid var(--border); color: var(--text-muted); }
+    #preview code { font-family: var(--font-mono); font-size: 85%; background: var(--surface); padding: 2px 5px; border-radius: 4px; }
+    #preview pre { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 16px; overflow-x: auto; margin-bottom: 16px; }
+    #preview pre code { background: none; padding: 0; font-size: 90%; }
+    #preview table { border-collapse: collapse; width: 100%; margin-bottom: 16px; }
+    #preview th, #preview td { border: 1px solid var(--border); padding: 8px 12px; text-align: left; }
+    #preview th { background: var(--surface); font-weight: 600; }
+    #preview img { max-width: 100%; height: auto; border-radius: 6px; }
+    #preview hr { border: none; border-top: 1px solid var(--border); margin: 24px 0; }
+    .mermaid { text-align: center; margin-bottom: 16px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="querybar">
+    <label>mq&gt;</label>
+    <input id="queryInput" type="text" value="." placeholder="e.g.  .h  |  select(level == 1)" spellcheck="false" />
+    <button class="bar-btn" id="clearBtn">Clear</button>
+    <span id="queryError"></span>
+    <span id="status" class="disconnected">watch</span>
+  </div>
+
+  <nav id="sidebar">
+    <div id="sidebarHeader">
+      <input id="searchInput" type="text" placeholder="Search files…" />
+      <button id="viewToggleBtn" title="Toggle list / tree">
+        <svg id="iconList" width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+          <rect x="0" y="2" width="16" height="2" rx="1"/><rect x="0" y="7" width="16" height="2" rx="1"/><rect x="0" y="12" width="16" height="2" rx="1"/>
+        </svg>
+        <svg id="iconTree" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" style="display:none">
+          <rect x="1" y="1" width="5" height="4" rx="1"/><rect x="10" y="1" width="5" height="4" rx="1"/><rect x="10" y="11" width="5" height="4" rx="1"/><path d="M3.5 5v3.5H8v-1h3V5h-1v2.5H4.5V5h-1z"/>
+        </svg>
+      </button>
+    </div>
+    <ul id="fileList"></ul>
+  </nav>
+
+  <div id="previewWrap">
+    <div id="previewToolbar">
+      <button class="bar-btn" id="copyBtn">
+        <svg width="13" height="13" viewBox="0 0 16 16" fill="currentColor">
+          <path d="M0 6.75C0 5.784.784 5 1.75 5h1.5a.75.75 0 0 1 0 1.5h-1.5a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-1.5a.75.75 0 0 1 1.5 0v1.5A1.75 1.75 0 0 1 9.25 16h-7.5A1.75 1.75 0 0 1 0 14.25Z"/>
+          <path d="M5 1.75C5 .784 5.784 0 6.75 0h7.5C15.216 0 16 .784 16 1.75v7.5A1.75 1.75 0 0 1 14.25 11h-7.5A1.75 1.75 0 0 1 5 9.25Zm1.75-.25a.25.25 0 0 0-.25.25v7.5c0 .138.112.25.25.25h7.5a.25.25 0 0 0 .25-.25v-7.5a.25.25 0 0 0-.25-.25Z"/>
+        </svg>
+        <span class="copy-label">Copy</span>
+      </button>
+    </div>
+    <article id="preview"></article>
+  </div>
+</div>
+
+<script type="module" src="/assets/bundle.js"></script>
+</body>
+</html>

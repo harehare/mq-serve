@@ -1,0 +1,43 @@
+{
+  "name": "mq-serve-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build"
+  },
+  "dependencies": {
+    "lucide-react": "^0.511.0",
+    "react": "^19",
+    "react-dom": "^19",
+    "unified": "^11",
+    "remark-parse": "^11",
+    "remark-gfm": "^4",
+    "remark-math": "^6",
+    "remark-frontmatter": "^5",
+    "remark-rehype": "^11",
+    "rehype-katex": "^7",
+    "rehype-slug": "^6",
+    "rehype-stringify": "^10",
+    "unist-util-visit": "^5",
+    "@shikijs/rehype": "^1",
+    "shiki": "^1",
+    "mermaid": "^11",
+    "katex": "^0.16",
+    "yaml": "^2",
+    "@dnd-kit/core": "^6",
+    "@dnd-kit/sortable": "^8",
+    "@dnd-kit/utilities": "^3"
+  },
+  "devDependencies": {
+    "vite": "^8",
+    "@vitejs/plugin-react": "^6",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "typescript": "^5",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/katex": "^0.16"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
