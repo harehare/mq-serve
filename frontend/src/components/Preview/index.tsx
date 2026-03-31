@@ -13,12 +13,14 @@ interface Props {
   showRaw: boolean
   wideView: boolean
   showToc: boolean
+  onShowTocChange: (v: boolean) => void
   theme: 'light' | 'dark'
   isLoading: boolean
 }
 
-export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, theme, isLoading }: Props) {
+export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, onShowTocChange, theme, isLoading }: Props) {
   const articleRef = useRef<HTMLElement>(null)
+  const mainRef = useRef<HTMLDivElement>(null)
   const mermaidCountRef = useRef(0)
   const [highlightedCode, setHighlightedCode] = useState('')
 
@@ -60,9 +62,9 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
     <div className="preview-wrap">
       {isLoading && <div className="loading-bar" />}
       {showToc && parseResult && parseResult.headings.length > 0 && (
-        <Toc headings={parseResult.headings} />
+        <Toc headings={parseResult.headings} scrollContainer={mainRef} onClose={() => onShowTocChange(false)} />
       )}
-      <div className="preview-main">
+      <div className="preview-main" ref={mainRef}>
         {showRaw ? (
           <div
             className="raw-highlighted"

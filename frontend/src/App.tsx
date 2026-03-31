@@ -261,6 +261,7 @@ export default function App() {
         showRaw={session.showRaw}
         wideView={session.wideView}
         showToc={session.showToc}
+        onShowTocChange={(t) => updateSession({ showToc: t })}
         theme={effectiveTheme}
         isLoading={isLoading}
       />
