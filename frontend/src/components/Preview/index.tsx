@@ -1,11 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import mermaid from 'mermaid'
 import type { ParseResult } from '../../lib/markdown'
 import { highlightMarkdown } from '../../lib/markdown'
 import Frontmatter from './Frontmatter'
 import Toc from './Toc'
-
-mermaid.initialize({ startOnLoad: false, theme: 'default' })
 
 interface Props {
   parseResult: ParseResult | null
@@ -38,21 +35,23 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
     const diagrams = el.querySelectorAll<HTMLDivElement>('.mermaid[data-mermaid]')
     if (diagrams.length === 0) return
 
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: theme === 'dark' ? 'dark' : 'default',
-    })
+    import('mermaid').then(({ default: mermaid }) => {
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: theme === 'dark' ? 'dark' : 'default',
+      })
 
-    diagrams.forEach(async (div) => {
-      const code = div.getAttribute('data-mermaid') ?? div.textContent ?? ''
-      const id = `mermaid-${++mermaidCountRef.current}`
-      try {
-        const { svg } = await mermaid.render(id, code)
-        div.innerHTML = svg
-        div.removeAttribute('data-mermaid')
-      } catch (err) {
-        div.textContent = `Mermaid error: ${err}`
-      }
+      diagrams.forEach(async (div) => {
+        const code = div.getAttribute('data-mermaid') ?? div.textContent ?? ''
+        const id = `mermaid-${++mermaidCountRef.current}`
+        try {
+          const { svg } = await mermaid.render(id, code)
+          div.innerHTML = svg
+          div.removeAttribute('data-mermaid')
+        } catch (err) {
+          div.textContent = `Mermaid error: ${err}`
+        }
+      })
     })
   }, [parseResult?.html, theme])
 

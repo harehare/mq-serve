@@ -7,7 +7,7 @@ import remarkRehype from 'remark-rehype'
 import rehypeKatex from 'rehype-katex'
 import rehypeSlug from 'rehype-slug'
 import rehypeStringify from 'rehype-stringify'
-import rehypeShiki from '@shikijs/rehype'
+import rehypeShikiFromHighlighter from '@shikijs/rehype/core'
 import { createHighlighter } from 'shiki'
 import { visit } from 'unist-util-visit'
 import { parse as parseYaml } from 'yaml'
@@ -88,41 +88,8 @@ function rehypeExtractHeadings() {
   }
 }
 
-// Create processor eagerly to avoid cold-start latency on first render
-let processorPromise: Promise<ReturnType<typeof unified>> | null = null
-
-function getProcessor(): Promise<ReturnType<typeof unified>> {
-  if (!processorPromise) {
-    processorPromise = Promise.resolve(
-      unified()
-        .use(remarkParse)
-        .use(remarkGfm)
-        .use(remarkMath)
-        .use(remarkFrontmatter, ['yaml'])
-        .use(remarkExtractFrontmatter)
-        .use(remarkRehype, { allowDangerousHtml: true })
-        .use(rehypeMermaid)
-        .use(rehypeShiki, {
-          themes: { light: 'github-light', dark: 'github-dark' },
-          defaultColor: false,
-        })
-        .use(rehypeKatex)
-        .use(rehypeSlug)
-        .use(rehypeExtractHeadings)
-        .use(rehypeStringify, { allowDangerousHtml: true })
-    )
-    // Warm up: process empty content so Shiki loads its themes/languages
-    // before the first real document arrives
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-    processorPromise!.then((p) => p.process(''))
-  }
-  return processorPromise!
-}
-
-// Kick off processor initialization immediately at module load time
-getProcessor()
-
-// Shared highlighter instance for raw code view
+// Shared highlighter instance reused by both the unified processor and raw code view.
+// Resolves once themes and the markdown language grammar are ready.
 let highlighterPromise: ReturnType<typeof createHighlighter> | null = null
 
 function getHighlighter() {
@@ -135,8 +102,36 @@ function getHighlighter() {
   return highlighterPromise
 }
 
-// Warm up the highlighter at module load time
-getHighlighter()
+// Processor promise resolves only after the highlighter is ready so the
+// first real document render never has to wait for Shiki initialization.
+let processorPromise: Promise<ReturnType<typeof unified>> | null = null
+
+function getProcessor(): Promise<ReturnType<typeof unified>> {
+  if (!processorPromise) {
+    processorPromise = getHighlighter().then((highlighter) => {
+      return unified()
+        .use(remarkParse)
+        .use(remarkGfm)
+        .use(remarkMath)
+        .use(remarkFrontmatter, ['yaml'])
+        .use(remarkExtractFrontmatter)
+        .use(remarkRehype, { allowDangerousHtml: true })
+        .use(rehypeMermaid)
+        .use(rehypeShikiFromHighlighter, highlighter, {
+          themes: { light: 'github-light', dark: 'github-dark' },
+          defaultColor: false,
+        })
+        .use(rehypeKatex)
+        .use(rehypeSlug)
+        .use(rehypeExtractHeadings)
+        .use(rehypeStringify, { allowDangerousHtml: true })
+    })
+  }
+  return processorPromise!
+}
+
+// Kick off highlighter + processor initialization immediately at module load time
+getProcessor()
 
 export async function highlightMarkdown(code: string): Promise<string> {
   const highlighter = await getHighlighter()

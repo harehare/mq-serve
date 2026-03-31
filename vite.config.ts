@@ -14,6 +14,10 @@ export default defineConfig({
           if (info.name?.endsWith('.css')) return 'bundle.css'
           return '[name]-[hash][extname]'
         },
+        manualChunks: (id) => {
+          if (id.includes('/mermaid/') || id.includes('/node_modules/mermaid')) return 'mermaid'
+          if (id.includes('/katex/') || id.includes('rehype-katex')) return 'katex'
+        },
       },
     },
   },
