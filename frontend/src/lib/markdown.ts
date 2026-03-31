@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex'
 import rehypeSlug from 'rehype-slug'
 import rehypeStringify from 'rehype-stringify'
 import rehypeShiki from '@shikijs/rehype'
+import { createHighlighter } from 'shiki'
 import { visit } from 'unist-util-visit'
 import { parse as parseYaml } from 'yaml'
 import type { Root as MdastRoot } from 'mdast'
@@ -120,6 +121,31 @@ function getProcessor(): Promise<ReturnType<typeof unified>> {
 
 // Kick off processor initialization immediately at module load time
 getProcessor()
+
+// Shared highlighter instance for raw code view
+let highlighterPromise: ReturnType<typeof createHighlighter> | null = null
+
+function getHighlighter() {
+  if (!highlighterPromise) {
+    highlighterPromise = createHighlighter({
+      themes: ['github-light', 'github-dark'],
+      langs: ['markdown'],
+    })
+  }
+  return highlighterPromise
+}
+
+// Warm up the highlighter at module load time
+getHighlighter()
+
+export async function highlightMarkdown(code: string): Promise<string> {
+  const highlighter = await getHighlighter()
+  return highlighter.codeToHtml(code, {
+    lang: 'markdown',
+    themes: { light: 'github-light', dark: 'github-dark' },
+    defaultColor: false,
+  })
+}
 
 export async function renderMarkdown(content: string): Promise<ParseResult> {
   const processor = await getProcessor()

@@ -177,6 +177,35 @@ html, body {
 .bar-btn.copied { color: #3fb950; border-color: #3fb950; }
 .icon-btn { padding: 4px 7px; }
 
+/* ── View toggle (Preview / Code) ── */
+.view-toggle {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.view-toggle button {
+  padding: 3px 12px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--bg);
+  color: var(--text-muted);
+  border: none;
+  cursor: pointer;
+  line-height: 1.6;
+}
+.view-toggle button + button {
+  border-left: 1px solid var(--border);
+}
+.view-toggle button:hover {
+  background: var(--surface);
+  color: var(--text);
+}
+.view-toggle button.active {
+  background: var(--accent);
+  color: #fff;
+}
+
 /* ── Sidebar ── */
 .sidebar {
   grid-row: 2 / 4;
@@ -477,14 +506,36 @@ html, body {
   width: 100%;
 }
 
-.raw-content {
+.raw-highlighted {
   font-family: var(--font-mono);
   font-size: 13px;
   padding: 32px 40px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text);
   flex: 1;
+}
+
+.raw-highlighted .shiki {
+  margin: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent !important;
+}
+
+.raw-highlighted .shiki code {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  counter-reset: line;
+}
+
+.raw-highlighted .shiki code .line::before {
+  counter-increment: line;
+  content: counter(line);
+  display: inline-block;
+  width: 2.5em;
+  margin-right: 1.5em;
+  text-align: right;
+  color: var(--text-muted);
+  user-select: none;
+  opacity: 0.5;
 }
 
 /* ── Markdown styles ── */

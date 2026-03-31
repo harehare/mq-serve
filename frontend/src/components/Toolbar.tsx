@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react'
 import {
-  Sun, Moon, Monitor, ChevronsLeftRight, List, FileCode,
+  Sun, Moon, Monitor, ChevronsLeftRight, List,
   Copy, Check, RotateCcw, ChevronDown,
 } from 'lucide-react'
 import type { Session } from '../types'
@@ -78,13 +78,20 @@ export default function Toolbar({
       >
         <List size={ICON_SIZE} />
       </button>
-      <button
-        className={`bar-btn ${showRaw ? 'active' : ''}`}
-        onClick={() => onShowRawChange(!showRaw)}
-        title="Raw markdown"
-      >
-        <FileCode size={ICON_SIZE} />
-      </button>
+      <div className="view-toggle">
+        <button
+          className={!showRaw ? 'active' : ''}
+          onClick={() => onShowRawChange(false)}
+        >
+          Preview
+        </button>
+        <button
+          className={showRaw ? 'active' : ''}
+          onClick={() => onShowRawChange(true)}
+        >
+          Code
+        </button>
+      </div>
       <div className="copy-wrap">
         <button
           className={`bar-btn ${copied ? 'copied' : ''}`}

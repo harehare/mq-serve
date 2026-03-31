@@ -1,6 +1,7 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import mermaid from 'mermaid'
 import type { ParseResult } from '../../lib/markdown'
+import { highlightMarkdown } from '../../lib/markdown'
 import Frontmatter from './Frontmatter'
 import Toc from './Toc'
 
@@ -19,6 +20,13 @@ interface Props {
 export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, theme, isLoading }: Props) {
   const articleRef = useRef<HTMLElement>(null)
   const mermaidCountRef = useRef(0)
+  const [highlightedCode, setHighlightedCode] = useState('')
+
+  // Highlight raw markdown source when Code view is active
+  useEffect(() => {
+    if (!showRaw || !rawContent) return
+    highlightMarkdown(rawContent).then(setHighlightedCode)
+  }, [rawContent, showRaw])
 
   // Re-render mermaid diagrams after HTML is injected
   useEffect(() => {
@@ -56,7 +64,10 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
       )}
       <div className="preview-main">
         {showRaw ? (
-          <pre className="raw-content">{rawContent}</pre>
+          <div
+            className="raw-highlighted"
+            dangerouslySetInnerHTML={{ __html: highlightedCode || rawContent }}
+          />
         ) : (
           <>
             {parseResult?.frontmatter && (
