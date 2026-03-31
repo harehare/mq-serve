@@ -29,6 +29,7 @@ export default function App() {
   const [parseResult, setParseResult] = useState<ParseResult | null>(null)
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [inMemoryFiles, setInMemoryFiles] = useState<InMemoryFile[]>([])
+  const [isLoading, setIsLoading] = useState(false)
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () => window.matchMedia('(prefers-color-scheme: dark)').matches
   )
@@ -69,9 +70,34 @@ export default function App() {
     }
   }, [])
 
-  useEffect(() => { fetchGroups() }, [fetchGroups])
+  // Initialize: fetch file list, restore saved path or auto-select first file
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const init = async () => {
+      try {
+        const res = await fetch('/api/files')
+        const data = await res.json() as { groups: FileGroup[] }
+        setGroups(data.groups)
+
+        const allFiles = data.groups.flatMap((g) => g.files)
+        if (allFiles.length === 0) return
+
+        const savedPath = session.currentPath
+        const targetPath =
+          savedPath && allFiles.some((f) => f.path === savedPath)
+            ? savedPath
+            : allFiles[0].path
+
+        loadFile(targetPath)
+      } catch {
+        // server unreachable
+      }
+    }
+    init()
+  }, []) // intentionally on mount only
 
   const loadFile = useCallback(async (path: string) => {
+    setIsLoading(true)
     const mem = inMemoryFiles.find((f) => f.name === path)
     if (mem) {
       setRawContent(mem.content)
@@ -84,27 +110,29 @@ export default function App() {
         const content = await res.text()
         setRawContent(content)
         updateSession({ currentPath: path })
+      } else {
+        setIsLoading(false)
       }
     } catch {
-      // ignore
+      setIsLoading(false)
     }
   }, [inMemoryFiles, updateSession])
 
-  // Restore session on mount
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => {
-    if (session.currentPath) loadFile(session.currentPath)
-  }, []) // intentionally on mount only
-
   // Run mq query when content or query changes, then render markdown in one step
   useEffect(() => {
-    if (!rawContent) return
+    if (!rawContent) {
+      setIsLoading(false)
+      return
+    }
     const isMdx = session.currentPath?.endsWith('.mdx') ?? false
     const content = isMdx ? preprocessMdx(rawContent) : rawContent
 
     if (debouncedQuery.trim() === '.' || debouncedQuery.trim() === '') {
       setQueryError('')
-      renderMarkdown(content).then(setParseResult).catch(console.error)
+      renderMarkdown(content).then((result) => {
+        setParseResult(result)
+        setIsLoading(false)
+      }).catch(console.error)
       return
     }
 
@@ -117,13 +145,20 @@ export default function App() {
       .then((data: { result?: string; error?: string }) => {
         if (data.error) {
           setQueryError(data.error)
+          setIsLoading(false)
         } else {
           const result = data.result ?? ''
           setQueryError('')
-          return renderMarkdown(result).then(setParseResult)
+          return renderMarkdown(result).then((parsed) => {
+            setParseResult(parsed)
+            setIsLoading(false)
+          })
         }
       })
-      .catch(() => setQueryError('Network error'))
+      .catch(() => {
+        setQueryError('Network error')
+        setIsLoading(false)
+      })
   }, [rawContent, debouncedQuery, session.currentPath])
 
   // WebSocket live reload
@@ -227,6 +262,7 @@ export default function App() {
         wideView={session.wideView}
         showToc={session.showToc}
         theme={effectiveTheme}
+        isLoading={isLoading}
       />
     </div>
   )

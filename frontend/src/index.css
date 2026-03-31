@@ -358,6 +358,34 @@ html, body {
   grid-row: 2 / 4;
   display: flex;
   overflow: hidden;
+  position: relative;
+}
+
+/* ── Loading bar ── */
+.loading-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  z-index: 10;
+  overflow: hidden;
+}
+
+.loading-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -60%;
+  width: 60%;
+  height: 100%;
+  background: var(--accent);
+  animation: loading-sweep 1.2s ease-in-out infinite;
+}
+
+@keyframes loading-sweep {
+  0%   { left: -60%; }
+  100% { left: 160%; }
 }
 
 .preview-main {

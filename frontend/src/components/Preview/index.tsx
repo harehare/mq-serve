@@ -13,9 +13,10 @@ interface Props {
   wideView: boolean
   showToc: boolean
   theme: 'light' | 'dark'
+  isLoading: boolean
 }
 
-export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, theme }: Props) {
+export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, theme, isLoading }: Props) {
   const articleRef = useRef<HTMLElement>(null)
   const mermaidCountRef = useRef(0)
 
@@ -49,6 +50,7 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
 
   return (
     <div className="preview-wrap">
+      {isLoading && <div className="loading-bar" />}
       {showToc && parseResult && parseResult.headings.length > 0 && (
         <Toc headings={parseResult.headings} />
       )}

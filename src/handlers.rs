@@ -7,6 +7,8 @@ use std::{
     time::UNIX_EPOCH,
 };
 
+use rayon::prelude::*;
+
 use axum::{
     Json,
     body::Body,
@@ -106,45 +108,52 @@ fn extract_first_heading(path: &PathBuf) -> Option<String> {
 }
 
 pub async fn list_files(State(state): State<Arc<AppState>>) -> Json<GroupsResponse> {
-    let groups = state
-        .paths
-        .iter()
-        .map(|root| {
-            let name = root
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_else(|| root.to_string_lossy().into_owned());
+    let paths = state.paths.clone();
+    let groups = tokio::task::spawn_blocking(move || {
+        paths
+            .iter()
+            .map(|root| {
+                let name = root
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| root.to_string_lossy().into_owned());
 
-            let files = collect_markdown_files(std::slice::from_ref(root))
-                .into_iter()
-                .map(|p| {
-                    let modified = p
-                        .metadata()
-                        .ok()
-                        .and_then(|m| m.modified().ok())
-                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                        .map(|d| d.as_secs());
-                    let fname = p
-                        .file_name()
-                        .map(|n| n.to_string_lossy().into_owned())
-                        .unwrap_or_default();
-                    let title = extract_first_heading(&p);
-                    FileEntry {
-                        path: p.to_string_lossy().into_owned(),
-                        name: fname,
-                        modified,
-                        title,
-                    }
-                })
-                .collect();
+                let mut files: Vec<FileEntry> =
+                    collect_markdown_files(std::slice::from_ref(root))
+                        .into_par_iter()
+                        .map(|p| {
+                            let modified = p
+                                .metadata()
+                                .ok()
+                                .and_then(|m| m.modified().ok())
+                                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                                .map(|d| d.as_secs());
+                            let fname = p
+                                .file_name()
+                                .map(|n| n.to_string_lossy().into_owned())
+                                .unwrap_or_default();
+                            let title = extract_first_heading(&p);
+                            FileEntry {
+                                path: p.to_string_lossy().into_owned(),
+                                name: fname,
+                                modified,
+                                title,
+                            }
+                        })
+                        .collect();
 
-            FileGroup {
-                root: root.to_string_lossy().into_owned(),
-                name,
-                files,
-            }
-        })
-        .collect();
+                files.sort_by(|a, b| a.name.cmp(&b.name));
+
+                FileGroup {
+                    root: root.to_string_lossy().into_owned(),
+                    name,
+                    files,
+                }
+            })
+            .collect()
+    })
+    .await
+    .unwrap_or_default();
 
     Json(GroupsResponse { groups })
 }
@@ -160,12 +169,23 @@ pub async fn get_file(
     State(state): State<Arc<AppState>>,
     Query(params): Query<FileQuery>,
 ) -> Result<String, (StatusCode, String)> {
-    let requested = PathBuf::from(&params.path);
-    let allowed = collect_markdown_files(&state.paths);
-    if !allowed.contains(&requested) {
+    let path = PathBuf::from(&params.path);
+    let paths = state.paths.clone();
+    let path_check = path.clone();
+
+    let is_allowed = tokio::task::spawn_blocking(move || {
+        collect_markdown_files(&paths).contains(&path_check)
+    })
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into()))?;
+
+    if !is_allowed {
         return Err((StatusCode::FORBIDDEN, "access denied".into()));
     }
-    std::fs::read_to_string(&requested).map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))
+
+    tokio::fs::read_to_string(&path)
+        .await
+        .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))
 }
 
 #[derive(Deserialize)]
