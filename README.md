@@ -3,6 +3,8 @@
 A browser-based Markdown viewer with [mq](https://github.com/harehare/mq) query support.
 Start a local server from the CLI, open your Markdown files in the browser, and filter or transform them with mq queries in real time.
 
+![demo](assets/image.jpg)
+
 ## Features
 
 - Browser viewer: Renders Markdown in the browser with GitHub-style styling
@@ -52,11 +54,11 @@ Options:
 
 ## mq Query Examples
 
-| Query | Effect |
-|-------|--------|
-| `.h` | Extract all headings |
-| `.code` | Extract all code blocks |
-| `.p` | Extract all paragraphs |
+| Query            | Effect                                    |
+| ---------------- | ----------------------------------------- |
+| `.h`             | Extract all headings                      |
+| `.code`          | Extract all code blocks                   |
+| `.p`             | Extract all paragraphs                    |
 | `.h \| upcase()` | Extract headings and convert to uppercase |
 
 Enter a query in the bar at the top of the page and press Enter.
