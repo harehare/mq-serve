@@ -66,14 +66,6 @@ Click **Clear** to reset to the original content.
 
 ## Development
 
-Requires a local checkout of the [mq](https://github.com/harehare/mq) repository as a sibling directory:
-
-```
-parent/
-├── mq/        ← https://github.com/harehare/mq
-└── mq-serve/  ← this repo
-```
-
 ```bash
 just build-dev
 just run -- ../mq/docs
