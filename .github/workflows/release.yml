@@ -43,7 +43,7 @@ jobs:
         with:
           name: mq-serve-${{ matrix.asset_name }}
           path: |
-            target/release/mq-serve
+            target/release/mq-serve${{ matrix.ext }}
           if-no-files-found: error
           retention-days: 1
 
