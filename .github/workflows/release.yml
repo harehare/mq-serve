@@ -38,12 +38,15 @@ jobs:
       - uses: extractions/setup-just@f8a3cce218d9f83db3a2ecd90e41ac3de6cdfd9b # v3.1.0
       - name: Build
         run: just build
+      - name: Rename binary
+        shell: bash
+        run: mv target/release/mq-serve${{ matrix.ext }} target/release/mq-serve-${{ matrix.asset_name }}${{ matrix.ext }}
       - name: Upload artifact
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
         with:
           name: mq-serve-${{ matrix.asset_name }}
           path: |
-            target/release/mq-serve${{ matrix.ext }}
+            target/release/mq-serve-${{ matrix.asset_name }}${{ matrix.ext }}
           if-no-files-found: error
           retention-days: 1
 
