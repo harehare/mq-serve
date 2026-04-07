@@ -15,10 +15,21 @@ Start a local server from the CLI, open your Markdown files in the browser, and 
 
 ## Installation
 
+### Quick Install
+
+```bash
+curl -sSL https://raw.githubusercontent.com/harehare/mq-serve/refs/heads/main/bin/install.sh | bash
+```
+
+The installer will:
+- Download the latest mq binary for your platform
+- Install it to `~/.mq/bin/`
+- Update your shell profile to add mq to your PATH
+
 ### Cargo
 
 ```sh
-cargo install --git https://github.com/harehare/mq-serve.git
+$ cargo install --git https://github.com/harehare/mq-serve.git
 ```
 
 ## Usage
