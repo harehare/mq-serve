@@ -6,8 +6,14 @@ fn main() {
     println!("cargo:rerun-if-changed=vite.config.ts");
     println!("cargo:rerun-if-changed=package.json");
 
+    let pnpm = if cfg!(target_os = "windows") {
+        "pnpm.cmd"
+    } else {
+        "pnpm"
+    };
+
     // pnpm install (no-op if already up to date)
-    let status = Command::new("pnpm")
+    let status = Command::new(pnpm)
         .args(["install"])
         .status()
         .unwrap_or_else(|e| {
@@ -16,7 +22,7 @@ fn main() {
     assert!(status.success(), "pnpm install failed");
 
     // Build frontend with Vite
-    let status = Command::new("pnpm")
+    let status = Command::new(pnpm)
         .args(["run", "build"])
         .status()
         .unwrap_or_else(|e| panic!("Failed to run `pnpm run build`: {e}"));

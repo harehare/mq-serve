@@ -4,18 +4,12 @@
 default:
     @just --list
 
-# Install npm dependencies
-install:
-    pnpm install
-
 # Build frontend (Vite) + Rust binary
-build: install
-    pnpm run build
+build:
     cargo build --release
 
 # Build in debug mode (faster)
 build-dev: install
-    pnpm run build
     cargo build
 
 # Build only the frontend
@@ -54,3 +48,4 @@ clean:
 # Clean everything including node_modules
 clean-all: clean
     rm -rf node_modules
+
