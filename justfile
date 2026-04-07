@@ -9,11 +9,12 @@ build:
     cargo build --release
 
 # Build in debug mode (faster)
-build-dev: install
+build-dev:
     cargo build
 
 # Build only the frontend
-build-frontend: install
+build-frontend:
+    pnpm install
     pnpm run build
 
 # Build only the Rust binary (assumes frontend is already built)
