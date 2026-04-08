@@ -7,7 +7,7 @@ license = "MIT"
 name = "mq-serve"
 readme = "README.md"
 repository = "https://github.com/harehare/mq-serve"
-version = "0.1.1"
+version = "0.1.2"
 
 [[bin]]
 name = "mq-serve"

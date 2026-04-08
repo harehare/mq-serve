@@ -54,13 +54,14 @@ async fn main() {
         return;
     }
 
-    if cli.daemon {
+    if cli.daemon || cli.no_open {
         let exe = std::env::current_exe().expect("failed to get current executable path");
         let args: Vec<String> = std::env::args()
             .skip(1)
             .filter(|a| a != "--daemon" && a != "-d")
             .collect();
 
+        #[allow(clippy::zombie_processes)]
         let child = std::process::Command::new(&exe)
             .args(&args)
             .stdin(std::process::Stdio::null())
