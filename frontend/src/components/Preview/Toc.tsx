@@ -4,7 +4,7 @@ import type { Heading } from '../../lib/markdown'
 
 interface Props {
   headings: Heading[]
-  scrollContainer: React.RefObject<HTMLDivElement>
+  scrollContainer: React.RefObject<HTMLDivElement | null>
   onClose: () => void
 }
 

@@ -22,4 +22,12 @@ pub struct Cli {
     /// Disable file-change watching.
     #[arg(long)]
     pub no_watch: bool,
+
+    /// Run the server in the background (detach from terminal).
+    #[arg(long, short = 'd')]
+    pub daemon: bool,
+
+    /// Stop a background server running on the given port.
+    #[arg(long)]
+    pub stop: bool,
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import type { FileGroup, SearchResult, Session } from './types'
 import { loadSession, saveSession } from './store/session'
 import { useWebSocket } from './hooks/useWebSocket'
@@ -30,6 +30,8 @@ export default function App() {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [inMemoryFiles, setInMemoryFiles] = useState<InMemoryFile[]>([])
   const [isLoading, setIsLoading] = useState(false)
+  const rawContentRef = useRef(rawContent)
+  useEffect(() => { rawContentRef.current = rawContent }, [rawContent])
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () => window.matchMedia('(prefers-color-scheme: dark)').matches
   )
@@ -98,8 +100,16 @@ export default function App() {
 
   const loadFile = useCallback(async (path: string) => {
     setIsLoading(true)
+    // Add to open tabs if not already open
+    setSession((prev) => {
+      if (prev.openPaths.includes(path)) return prev
+      const next = { ...prev, openPaths: [...prev.openPaths, path] }
+      saveSession(next)
+      return next
+    })
     const mem = inMemoryFiles.find((f) => f.name === path)
     if (mem) {
+      if (mem.content === rawContentRef.current) setIsLoading(false)
       setRawContent(mem.content)
       updateSession({ currentPath: path })
       return
@@ -108,6 +118,7 @@ export default function App() {
       const res = await fetch(`/api/file?path=${encodeURIComponent(path)}`)
       if (res.ok) {
         const content = await res.text()
+        if (content === rawContentRef.current) setIsLoading(false)
         setRawContent(content)
         updateSession({ currentPath: path })
       } else {
@@ -117,6 +128,26 @@ export default function App() {
       setIsLoading(false)
     }
   }, [inMemoryFiles, updateSession])
+
+  const closeTab = useCallback((path: string) => {
+    setSession((prev) => {
+      const idx = prev.openPaths.indexOf(path)
+      const newOpen = prev.openPaths.filter((p) => p !== path)
+      let newCurrent = prev.currentPath
+      if (prev.currentPath === path) {
+        // Switch to adjacent tab
+        newCurrent = newOpen[Math.max(0, idx - 1)] ?? newOpen[0] ?? null
+      }
+      const next = { ...prev, openPaths: newOpen, currentPath: newCurrent }
+      saveSession(next)
+      return next
+    })
+  }, [])
+
+  const switchTab = useCallback((path: string) => {
+    updateSession({ currentPath: path })
+    loadFile(path)
+  }, [updateSession, loadFile])
 
   // Run mq query when content or query changes, then render markdown in one step
   useEffect(() => {
@@ -264,6 +295,10 @@ export default function App() {
         onShowTocChange={(t) => updateSession({ showToc: t })}
         theme={effectiveTheme}
         isLoading={isLoading}
+        openPaths={session.openPaths}
+        currentPath={session.currentPath}
+        onTabSelect={switchTab}
+        onTabClose={closeTab}
       />
     </div>
   )

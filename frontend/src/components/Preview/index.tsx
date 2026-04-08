@@ -13,9 +13,17 @@ interface Props {
   onShowTocChange: (v: boolean) => void
   theme: 'light' | 'dark'
   isLoading: boolean
+  openPaths: string[]
+  currentPath: string | null
+  onTabSelect: (path: string) => void
+  onTabClose: (path: string) => void
 }
 
-export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, onShowTocChange, theme, isLoading }: Props) {
+function fileName(path: string): string {
+  return path.split('/').pop() ?? path
+}
+
+export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, onShowTocChange, theme, isLoading, openPaths, currentPath, onTabSelect, onTabClose }: Props) {
   const articleRef = useRef<HTMLElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
   const mermaidCountRef = useRef(0)
@@ -60,27 +68,47 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
   return (
     <div className="preview-wrap">
       {isLoading && <div className="loading-bar" />}
-      {showToc && parseResult && parseResult.headings.length > 0 && (
-        <Toc headings={parseResult.headings} scrollContainer={mainRef} onClose={() => onShowTocChange(false)} />
+      {openPaths.length > 1 && (
+        <div className="tab-bar">
+          {openPaths.map((path) => (
+            <div key={path} className={`tab ${path === currentPath ? 'active' : ''}`}>
+              <button className="tab-label" onClick={() => onTabSelect(path)}>
+                {fileName(path)}
+              </button>
+              <button
+                className="tab-close"
+                onClick={(e) => { e.stopPropagation(); onTabClose(path) }}
+                aria-label="Close tab"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
       )}
-      <div className="preview-main" ref={mainRef}>
-        {showRaw ? (
-          <div
-            className="raw-highlighted"
-            dangerouslySetInnerHTML={{ __html: highlightedCode || rawContent }}
-          />
-        ) : (
-          <>
-            {parseResult?.frontmatter && (
-              <Frontmatter data={parseResult.frontmatter} />
-            )}
-            <article
-              ref={articleRef}
-              className="preview"
-              style={{ maxWidth }}
-              dangerouslySetInnerHTML={{ __html: parseResult?.html ?? '' }}
+      <div className="preview-body">
+        <div className="preview-main" ref={mainRef}>
+          {showRaw ? (
+            <div
+              className="raw-highlighted"
+              dangerouslySetInnerHTML={{ __html: highlightedCode || rawContent }}
             />
-          </>
+          ) : (
+            <>
+              {parseResult?.frontmatter && (
+                <Frontmatter data={parseResult.frontmatter} />
+              )}
+              <article
+                ref={articleRef}
+                className="preview"
+                style={{ maxWidth }}
+                dangerouslySetInnerHTML={{ __html: parseResult?.html ?? '' }}
+              />
+            </>
+          )}
+        </div>
+        {showToc && parseResult && parseResult.headings.length > 0 && (
+          <Toc headings={parseResult.headings} scrollContainer={mainRef} onClose={() => onShowTocChange(false)} />
         )}
       </div>
     </div>

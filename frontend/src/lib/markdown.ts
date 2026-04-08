@@ -89,17 +89,36 @@ function rehypeExtractHeadings() {
 }
 
 // Shared highlighter instance reused by both the unified processor and raw code view.
-// Resolves once themes and the markdown language grammar are ready.
+// Resolves once themes and the common language grammars are ready.
 let highlighterPromise: ReturnType<typeof createHighlighter> | null = null
 
 function getHighlighter() {
   if (!highlighterPromise) {
     highlighterPromise = createHighlighter({
       themes: ['github-light', 'github-dark'],
-      langs: ['markdown'],
+      langs: [
+        'markdown', 'javascript', 'typescript', 'jsx', 'tsx',
+        'json', 'rust', 'python', 'go', 'java', 'c', 'cpp',
+        'bash', 'shell', 'yaml', 'toml', 'html', 'css', 'sql',
+        'ruby', 'php', 'swift', 'kotlin', 'diff', 'xml',
+      ],
     })
   }
   return highlighterPromise
+}
+
+// Dynamically load a language into the highlighter if not already loaded.
+async function ensureLang(lang: string): Promise<boolean> {
+  try {
+    const highlighter = await getHighlighter()
+    const loaded = highlighter.getLoadedLanguages()
+    if (!loaded.includes(lang as never)) {
+      await highlighter.loadLanguage(lang as never)
+    }
+    return true
+  } catch {
+    return false
+  }
 }
 
 // Processor promise resolves only after the highlighter is ready so the
@@ -143,6 +162,15 @@ export async function highlightMarkdown(code: string): Promise<string> {
 }
 
 export async function renderMarkdown(content: string): Promise<ParseResult> {
+  // Pre-load any languages referenced in fenced code blocks before rendering.
+  const fencedLangRe = /^```(\w[-\w]*)/gm
+  const langs = new Set<string>()
+  let m: RegExpExecArray | null
+  while ((m = fencedLangRe.exec(content)) !== null) {
+    langs.add(m[1].toLowerCase())
+  }
+  await Promise.all([...langs].map(ensureLang))
+
   const processor = await getProcessor()
   const file = await processor.process(content)
   const data = file.data as Record<string, unknown>

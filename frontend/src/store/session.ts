@@ -1,33 +1,34 @@
-import type { Session } from '../types'
+import type { Session } from "../types";
 
-const KEY = 'mq-serve-session'
+const KEY = "mq-serve-session";
 
 const defaultSession: Session = {
   currentPath: null,
-  query: '.',
-  viewMode: 'list',
-  theme: 'system',
+  openPaths: [],
+  query: ".",
+  viewMode: "list",
+  theme: "system",
   wideView: false,
   showToc: false,
   showRaw: false,
   groupOrder: [],
   fileOrder: {},
   sidebarLabel: {},
-}
+};
 
 export function loadSession(): Session {
   try {
-    const raw = localStorage.getItem(KEY)
-    if (!raw) return { ...defaultSession }
-    return { ...defaultSession, ...JSON.parse(raw) }
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return { ...defaultSession };
+    return { ...defaultSession, ...JSON.parse(raw), openPaths: [] };
   } catch {
-    return { ...defaultSession }
+    return { ...defaultSession };
   }
 }
 
 export function saveSession(session: Session): void {
   try {
-    localStorage.setItem(KEY, JSON.stringify(session))
+    localStorage.setItem(KEY, JSON.stringify({ ...session, openPaths: [] }));
   } catch {
     // localStorage unavailable
   }

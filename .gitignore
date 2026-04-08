@@ -2,3 +2,5 @@
 Cargo.lock
 /node_modules
 /assets/dist
+.DS_Store
+
