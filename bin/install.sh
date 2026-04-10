@@ -5,8 +5,7 @@ set -e
 # mq-serve installation script
 
 readonly MQS_REPO="harehare/mq-serve"
-readonly MQS_INSTALL_DIR="$HOME/.mq"
-readonly MQS_BIN_DIR="$MQS_INSTALL_DIR/bin"
+readonly MQS_BIN_DIR="$HOME/.local/bin"
 
 # Colors for output
 readonly RED='\033[0;31m'

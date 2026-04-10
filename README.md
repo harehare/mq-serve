@@ -23,7 +23,7 @@ curl -sSL https://raw.githubusercontent.com/harehare/mq-serve/refs/heads/main/bi
 
 The installer will:
 - Download the latest mq binary for your platform
-- Install it to `~/.mq/bin/`
+- Install it to `~/.local/bin/`
 - Update your shell profile to add mq to your PATH
 
 ### Cargo
