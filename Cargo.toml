@@ -7,7 +7,7 @@ license = "MIT"
 name = "mq-serve"
 readme = "README.md"
 repository = "https://github.com/harehare/mq-serve"
-version = "0.1.4"
+version = "0.1.6"
 
 [[bin]]
 name = "mq-serve"
@@ -19,14 +19,15 @@ clap = {version = "4", features = ["derive"]}
 ignore = "0.4"
 miette = "7"
 mime_guess = "2"
-mq-lang = "0.5.27"
-mq-markdown = "0.5.27"
+mq-lang = "0.5.28"
+mq-markdown = "0.5.28"
 notify = "8"
 open = "5"
 rayon = "1"
 rust-embed = "8"
 serde = {version = "1", features = ["derive"]}
 serde_json = "1"
+reqwest = {version = "0.12", features = ["json"]}
 tokio = {version = "1", features = ["full"]}
 tower-http = {version = "0.6", features = ["cors"]}
 tracing = "0.1"

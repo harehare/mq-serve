@@ -34,20 +34,58 @@ $ cargo install --git https://github.com/harehare/mq-serve.git
 
 ## Usage
 
-Serve files or directories:
+`mq-serve` runs in the background by default — the command returns immediately and the shell is free straight away.
 
 ```bash
-# Current directory
+# Current directory (background, opens browser)
 mq-serve
 
 # Specific files or directories
 mq-serve docs/ README.md
 
-# Custom port, no auto-open
-mq-serve docs/ --port 8080 --no-open
+# Second call adds files to the already-running server
+mq-serve CHANGELOG.md
+
+# Pipe content from stdin
+cat notes.md | mq-serve
+some-command | mq-serve
+
+# Custom port
+mq-serve docs/ -p 8080
+
+# Bind to all interfaces (e.g. inside Docker)
+mq-serve docs/ --bind 0.0.0.0
+
+# Run in the foreground (e.g. in a container or for debugging)
+mq-serve docs/ --foreground
 ```
 
 Open `http://localhost:7700` in your browser (opened automatically by default).
+
+### Single server, multiple files
+
+If a server is already running on the given port, subsequent `mq-serve` invocations add files to the existing session instead of starting a new one.
+
+```bash
+mq-serve README.md          # starts mq-serve in the background
+mq-serve CHANGELOG.md       # adds the file to the running server
+```
+
+To use a completely separate session, use a different port:
+
+```bash
+mq-serve draft.md -p 7701
+```
+
+### Starting, stopping and restarting
+
+```bash
+mq-serve --status           # show running server info (URL, version, PID, file count)
+mq-serve --stop             # stop the server on the default port
+mq-serve --restart          # restart the server (session is preserved)
+mq-serve --clear            # clear the saved session (restarts server if running)
+mq-serve --stop -p 7701     # stop/restart/clear on a specific port
+```
 
 ## Options
 
@@ -56,11 +94,17 @@ Arguments:
   [FILES_OR_DIRS]   Markdown files or directories to serve [default: current directory]
 
 Options:
-  --port <PORT>     Port to listen on [default: 7700]
-  --no-open         Do not automatically open the browser
-  --no-watch        Disable file-change watching
-  -h, --help        Print help
-  -V, --version     Print version
+  -p, --port <PORT>   Port to listen on [default: 7700]
+  -b, --bind <BIND>   Address to bind to [default: 127.0.0.1]
+  --no-open           Do not automatically open the browser
+  --no-watch          Disable file-change watching
+  -f, --foreground    Run in the foreground instead of the background
+  --stop              Stop the background server running on the given port
+  --restart           Restart the background server running on the given port
+  --status            Show the status of the server running on the given port
+  --clear             Clear the saved session (restarts server if running)
+  -h, --help          Print help
+  -V, --version       Print version
 ```
 
 ## mq Query Examples
