@@ -202,6 +202,9 @@ export default function App() {
           if (msg.path && msg.path === session.currentPath) {
             loadFile(msg.path)
           }
+        } else if (msg.type === 'reload') {
+          // A new file was added to the server – just refresh the sidebar.
+          fetchGroups()
         }
       },
       [fetchGroups, loadFile, session.currentPath]

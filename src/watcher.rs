@@ -20,7 +20,11 @@ pub fn spawn_watcher(
                     if is_markdown(path) {
                         let path_str = path.to_string_lossy().into_owned();
                         debug!("file changed: {}", path_str);
-                        let _ = tx_inner.send(path_str);
+                        // Broadcast a pre-serialized JSON message so the WS handler
+                        // can forward it without re-wrapping.
+                        let msg = serde_json::json!({ "type": "change", "path": path_str })
+                            .to_string();
+                        let _ = tx_inner.send(msg);
                     }
                 }
             }
@@ -67,17 +71,8 @@ pub fn collect_markdown_files(paths: &[PathBuf]) -> Vec<PathBuf> {
         }
     }
 
-    files.sort_by(|a, b| {
-        if a.is_dir() && !b.is_dir() {
-            std::cmp::Ordering::Less
-        } else if !a.is_dir() && b.is_dir() {
-            std::cmp::Ordering::Greater
-        } else {
-            a.cmp(b)
-        }
-    });
-
     files.sort();
     files.dedup();
     files
 }
+
