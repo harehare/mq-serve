@@ -192,29 +192,28 @@ pub async fn list_files(State(state): State<Arc<AppState>>) -> Json<GroupsRespon
                     .map(|n| n.to_string_lossy().into_owned())
                     .unwrap_or_else(|| root.to_string_lossy().into_owned());
 
-                let mut files: Vec<FileEntry> =
-                    collect_markdown_files(std::slice::from_ref(root))
-                        .into_par_iter()
-                        .map(|p| {
-                            let modified = p
-                                .metadata()
-                                .ok()
-                                .and_then(|m| m.modified().ok())
-                                .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                                .map(|d| d.as_secs());
-                            let fname = p
-                                .file_name()
-                                .map(|n| n.to_string_lossy().into_owned())
-                                .unwrap_or_default();
-                            let title = extract_first_heading(&p);
-                            FileEntry {
-                                path: p.to_string_lossy().into_owned(),
-                                name: fname,
-                                modified,
-                                title,
-                            }
-                        })
-                        .collect();
+                let mut files: Vec<FileEntry> = collect_markdown_files(std::slice::from_ref(root))
+                    .into_par_iter()
+                    .map(|p| {
+                        let modified = p
+                            .metadata()
+                            .ok()
+                            .and_then(|m| m.modified().ok())
+                            .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                            .map(|d| d.as_secs());
+                        let fname = p
+                            .file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default();
+                        let title = extract_first_heading(&p);
+                        FileEntry {
+                            path: p.to_string_lossy().into_owned(),
+                            name: fname,
+                            modified,
+                            title,
+                        }
+                    })
+                    .collect();
 
                 files.sort_by(|a, b| a.name.cmp(&b.name));
 
@@ -247,11 +246,10 @@ pub async fn get_file(
     let paths = state.paths.read().unwrap().clone();
     let path_check = path.clone();
 
-    let is_allowed = tokio::task::spawn_blocking(move || {
-        collect_markdown_files(&paths).contains(&path_check)
-    })
-    .await
-    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into()))?;
+    let is_allowed =
+        tokio::task::spawn_blocking(move || collect_markdown_files(&paths).contains(&path_check))
+            .await
+            .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "internal error".into()))?;
 
     if !is_allowed {
         return Err((StatusCode::FORBIDDEN, "access denied".into()));
@@ -313,7 +311,7 @@ fn execute_query(content: &str, query: &str) -> miette::Result<String> {
 
 fn runtime_value_to_nodes(value: &mq_lang::RuntimeValue) -> Vec<mq_markdown::Node> {
     match value {
-        mq_lang::RuntimeValue::Markdown(node, _) => vec![node.clone()],
+        mq_lang::RuntimeValue::Markdown(node, _) => vec![(**node).clone()],
         mq_lang::RuntimeValue::Array(items) => {
             let has_markdown = items
                 .iter()
