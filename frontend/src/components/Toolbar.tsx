@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Sun, Moon, Monitor, ChevronsLeftRight, List,
-  Copy, Check, RotateCcw, ChevronDown, AlertCircle,
+  Copy, Check, RotateCcw, ChevronDown, AlertCircle, PanelLeft,
 } from 'lucide-react'
 import type { Session } from '../types'
 import type { ParseResult } from '../lib/markdown'
@@ -9,6 +9,8 @@ import type { ParseResult } from '../lib/markdown'
 interface Props {
   theme: Session['theme']
   onThemeChange: (t: Session['theme']) => void
+  sidebarOpen: boolean
+  onSidebarOpenChange: (v: boolean) => void
   wideView: boolean
   onWideViewChange: (w: boolean) => void
   showToc: boolean
@@ -49,9 +51,9 @@ async function writeToClipboard(text: string): Promise<void> {
 const ICON_SIZE = 15
 
 export default function Toolbar({
-  theme, onThemeChange, wideView, onWideViewChange,
-  showToc, onShowTocChange, showRaw, onShowRawChange,
-  rawContent, parseResult, onRestart,
+  theme, onThemeChange, sidebarOpen, onSidebarOpenChange,
+  wideView, onWideViewChange, showToc, onShowTocChange,
+  showRaw, onShowRawChange, rawContent, parseResult, onRestart,
 }: Props) {
   const [copyState, setCopyState] = useState<CopyState>('idle')
   const [showCopyMenu, setShowCopyMenu] = useState(false)
@@ -94,6 +96,13 @@ export default function Toolbar({
 
   return (
     <div className="toolbar">
+      <button
+        className={`bar-btn ${sidebarOpen ? 'active' : ''}`}
+        onClick={() => onSidebarOpenChange(!sidebarOpen)}
+        title="Toggle sidebar"
+      >
+        <PanelLeft size={ICON_SIZE} />
+      </button>
       <button
         className="bar-btn"
         onClick={() => onThemeChange(nextTheme)}

@@ -34,4 +34,5 @@ export interface Session {
   groupOrder: string[];
   fileOrder: Record<string, string[]>;
   sidebarLabel: Record<string, "name" | "heading">;
+  sidebarOpen: boolean;
 }

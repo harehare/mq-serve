@@ -14,6 +14,7 @@ const defaultSession: Session = {
   groupOrder: [],
   fileOrder: {},
   sidebarLabel: {},
+  sidebarOpen: true,
 };
 
 export function loadSession(): Session {
