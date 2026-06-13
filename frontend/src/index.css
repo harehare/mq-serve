@@ -62,6 +62,15 @@ html, body {
   grid-template-columns: var(--sidebar-w) 1fr;
   height: 100vh;
   overflow: hidden;
+  transition: grid-template-columns 0.2s ease;
+}
+
+.app.sidebar-hidden {
+  grid-template-columns: 0 1fr;
+}
+
+.app.sidebar-hidden .sidebar {
+  visibility: hidden;
 }
 
 /* ── Query bar ── */

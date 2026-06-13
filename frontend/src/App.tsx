@@ -258,7 +258,7 @@ export default function App() {
   }, [])
 
   return (
-    <div className="app">
+    <div className={`app${session.sidebarOpen ? '' : ' sidebar-hidden'}`}>
       <QueryBar
         query={session.query}
         onQueryChange={(q) => updateSession({ query: q })}
@@ -269,6 +269,8 @@ export default function App() {
       <Toolbar
         theme={session.theme}
         onThemeChange={(t) => updateSession({ theme: t })}
+        sidebarOpen={session.sidebarOpen}
+        onSidebarOpenChange={(v) => updateSession({ sidebarOpen: v })}
         wideView={session.wideView}
         onWideViewChange={(w) => updateSession({ wideView: w })}
         showToc={session.showToc}
