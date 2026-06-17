@@ -71,7 +71,12 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
       {openPaths.length > 1 && (
         <div className="tab-bar">
           {openPaths.map((path) => (
-            <div key={path} className={`tab ${path === currentPath ? 'active' : ''}`}>
+            <div
+              key={path}
+              className={`tab ${path === currentPath ? 'active' : ''}`}
+              onMouseDown={(e) => { if (e.button === 1) e.preventDefault() }}
+              onAuxClick={(e) => { if (e.button === 1) { e.preventDefault(); onTabClose(path) } }}
+            >
               <button className="tab-label" onClick={() => onTabSelect(path)}>
                 {fileName(path)}
               </button>
