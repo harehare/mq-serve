@@ -35,7 +35,9 @@
     "typescript": "^5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "@types/katex": "^0.16"
+    "@types/katex": "^0.16",
+    "@types/mdast": "^4",
+    "@types/hast": "^3"
   },
   "pnpm": {
     "onlyBuiltDependencies": ["esbuild"]

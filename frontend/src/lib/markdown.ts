@@ -121,32 +121,34 @@ async function ensureLang(lang: string): Promise<boolean> {
   }
 }
 
+function buildProcessor(highlighter: Awaited<ReturnType<typeof createHighlighter>>) {
+  return unified()
+    .use(remarkParse)
+    .use(remarkGfm)
+    .use(remarkMath)
+    .use(remarkFrontmatter, ['yaml'])
+    .use(remarkExtractFrontmatter)
+    .use(remarkRehype, { allowDangerousHtml: true })
+    .use(rehypeMermaid)
+    .use(rehypeShikiFromHighlighter, highlighter, {
+      themes: { light: 'github-light', dark: 'github-dark' },
+      defaultColor: false,
+    })
+    .use(rehypeKatex)
+    .use(rehypeSlug)
+    .use(rehypeExtractHeadings)
+    .use(rehypeStringify, { allowDangerousHtml: true })
+}
+
 // Processor promise resolves only after the highlighter is ready so the
 // first real document render never has to wait for Shiki initialization.
-let processorPromise: Promise<ReturnType<typeof unified>> | null = null
+let processorPromise: Promise<ReturnType<typeof buildProcessor>> | null = null
 
-function getProcessor(): Promise<ReturnType<typeof unified>> {
+function getProcessor(): Promise<ReturnType<typeof buildProcessor>> {
   if (!processorPromise) {
-    processorPromise = getHighlighter().then((highlighter) => {
-      return unified()
-        .use(remarkParse)
-        .use(remarkGfm)
-        .use(remarkMath)
-        .use(remarkFrontmatter, ['yaml'])
-        .use(remarkExtractFrontmatter)
-        .use(remarkRehype, { allowDangerousHtml: true })
-        .use(rehypeMermaid)
-        .use(rehypeShikiFromHighlighter, highlighter, {
-          themes: { light: 'github-light', dark: 'github-dark' },
-          defaultColor: false,
-        })
-        .use(rehypeKatex)
-        .use(rehypeSlug)
-        .use(rehypeExtractHeadings)
-        .use(rehypeStringify, { allowDangerousHtml: true })
-    })
+    processorPromise = getHighlighter().then(buildProcessor)
   }
-  return processorPromise!
+  return processorPromise
 }
 
 // Kick off highlighter + processor initialization immediately at module load time
