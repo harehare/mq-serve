@@ -259,6 +259,7 @@ export default function App() {
 
   return (
     <div className={`app${session.sidebarOpen ? '' : ' sidebar-hidden'}`}>
+      <title>{session.currentPath ? `mq-serve | ${session.currentPath}` : 'mq-serve'}</title>
       <QueryBar
         query={session.query}
         onQueryChange={(q) => updateSession({ query: q })}
