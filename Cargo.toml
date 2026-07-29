@@ -19,7 +19,7 @@ clap = {version = "4", features = ["derive"]}
 ignore = "0.4"
 miette = "7"
 mime_guess = "2"
-mq-lang = "0.6.5"
+mq-lang = "0.7.0"
 mq-markdown = "0.6.5"
 notify = "8"
 open = "5"
