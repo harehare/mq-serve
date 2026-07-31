@@ -71,6 +71,10 @@ pub struct AppState {
     /// Live watcher – held behind a Mutex so /api/add can register new paths.
     pub watcher: Option<Arc<Mutex<RecommendedWatcher>>>,
     pub port: u16,
+    /// Needed to spawn a replacement process on /api/restart.
+    pub bind: String,
+    pub no_watch: bool,
+    pub allow_remote_access: bool,
 }
 
 fn persist(state: &AppState) {
@@ -443,11 +447,20 @@ pub async fn search_files(
 // ── POST /api/restart ─────────────────────────────────────────────────────────
 
 pub async fn restart(State(state): State<Arc<AppState>>) -> StatusCode {
-    // Respond immediately then exit so the process can be restarted cleanly.
+    // Respond immediately, then spawn a replacement and exit. Restart has to
+    // spawn its own successor here: this endpoint is also hit directly from
+    // the browser's restart button, which has no external process watching
+    // to bring the server back up the way the CLI's `--restart` flow does.
     let port = state.port;
+    let bind = state.bind.clone();
+    let no_watch = state.no_watch;
+    let allow_remote_access = state.allow_remote_access;
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         crate::registry::unregister(port);
+        let pid =
+            crate::proc::spawn_background(port, &bind, no_watch, &[], None, allow_remote_access);
+        crate::proc::write_pid_file(port, pid);
         std::process::exit(0);
     });
     StatusCode::OK

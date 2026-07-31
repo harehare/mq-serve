@@ -87,6 +87,9 @@ pub async fn start(
         connection_count: Arc::new(AtomicUsize::new(0)),
         watcher,
         port,
+        bind: bind.to_string(),
+        no_watch,
+        allow_remote_access,
     });
 
     save_session(port, &merged, &targets);
@@ -110,7 +113,9 @@ pub async fn start(
     let display_host = if bind == "0.0.0.0" { "localhost" } else { bind };
     let url = format!("http://{}:{}", display_host, port);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    // On /api/restart the replacement process is spawned before the old one
+    // has released the port, so give it a few seconds to become free.
+    let listener = bind_with_retry(addr).await?;
 
     info!("mq-serve listening on {}", addr);
     println!("mq-serve: serving at {} (pid {})", url, std::process::id());
@@ -137,6 +142,20 @@ pub async fn start(
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+async fn bind_with_retry(addr: SocketAddr) -> std::io::Result<tokio::net::TcpListener> {
+    let mut last_err = None;
+    for _ in 0..20 {
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => return Ok(listener),
+            Err(e) => {
+                last_err = Some(e);
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+        }
+    }
+    Err(last_err.unwrap())
 }
 
 async fn shutdown_signal() {

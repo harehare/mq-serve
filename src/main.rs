@@ -1,5 +1,6 @@
 mod cli;
 mod handlers;
+mod proc;
 mod registry;
 mod server;
 mod session;
@@ -13,6 +14,7 @@ use std::{
 
 use clap::Parser;
 use cli::Cli;
+use proc::{kill_pid, pid_file_path, spawn_background, write_pid_file};
 use serde::Serialize;
 use session::session_file_path;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -49,12 +51,12 @@ async fn main() {
     }
 
     if cli.clear {
-        clear_session(cli.port, &cli.bind, cli.no_watch).await;
+        clear_session(cli.port).await;
         return;
     }
 
     if cli.restart {
-        do_restart(cli.port, &cli.bind, cli.no_open, cli.no_watch).await;
+        do_restart(cli.port, cli.no_open).await;
         return;
     }
 
@@ -117,7 +119,7 @@ async fn main() {
             std::process::exit(1);
         }
     } else {
-        let pid = spawn_background_server(
+        let pid = spawn_background(
             cli.port,
             &cli.bind,
             cli.no_watch,
@@ -125,8 +127,7 @@ async fn main() {
             cli.target.clone(),
             cli.dangerously_allow_remote_access,
         );
-        let pid_path = pid_file_path(cli.port);
-        let _ = std::fs::write(&pid_path, pid.to_string());
+        write_pid_file(cli.port, pid);
 
         if wait_for_server(&url, 8).await {
             if !cli.no_open {
@@ -134,7 +135,7 @@ async fn main() {
             }
             println!("mq-serve: serving at {} (pid {})", url, pid);
         } else {
-            let _ = std::fs::remove_file(&pid_path);
+            let _ = std::fs::remove_file(pid_file_path(cli.port));
             eprintln!("mq-serve: server did not start in time");
             std::process::exit(1);
         }
@@ -161,54 +162,6 @@ fn read_stdin_to_tempfile() -> Option<PathBuf> {
     let path = std::env::temp_dir().join(format!("mq-serve-stdin-{:x}.md", hash));
     std::fs::write(&path, &content).ok()?;
     Some(path)
-}
-
-/// The child always gets --foreground and --no-open so the parent owns browser-open.
-fn spawn_background_server(
-    port: u16,
-    bind: &str,
-    no_watch: bool,
-    paths: &[PathBuf],
-    target: Option<String>,
-    allow_remote_access: bool,
-) -> u32 {
-    let exe = std::env::current_exe().expect("failed to get current executable path");
-    let mut args = vec![
-        "--foreground".to_string(),
-        "--no-open".to_string(),
-        "-p".to_string(),
-        port.to_string(),
-        "-b".to_string(),
-        bind.to_string(),
-    ];
-    if no_watch {
-        args.push("--no-watch".to_string());
-    }
-    if let Some(target) = target {
-        args.push("--target".to_string());
-        args.push(target);
-    }
-    if allow_remote_access {
-        args.push("--dangerously-allow-remote-access".to_string());
-    }
-    for p in paths {
-        args.push(p.to_string_lossy().into_owned());
-    }
-
-    #[allow(clippy::zombie_processes)]
-    let child = std::process::Command::new(&exe)
-        .args(&args)
-        .stdin(std::process::Stdio::null())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .expect("failed to spawn background process");
-
-    child.id()
-}
-
-fn pid_file_path(port: u16) -> PathBuf {
-    std::env::temp_dir().join(format!("mq-serve-{}.pid", port))
 }
 
 async fn is_mq_serve_running(url: &str) -> bool {
@@ -281,21 +234,6 @@ async fn wait_for_server(url: &str, timeout_secs: u64) -> bool {
     false
 }
 
-fn kill_pid(pid: u32) {
-    #[cfg(unix)]
-    {
-        let _ = std::process::Command::new("kill")
-            .arg(pid.to_string())
-            .status();
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = std::process::Command::new("taskkill")
-            .args(["/PID", &pid.to_string(), "/F"])
-            .status();
-    }
-}
-
 async fn stop_server(port: u16) {
     let pid_path = pid_file_path(port);
     let pid_from_file = std::fs::read_to_string(&pid_path)
@@ -352,7 +290,9 @@ async fn close_paths(port: u16, paths: &[PathBuf]) {
     }
 }
 
-async fn do_restart(port: u16, bind: &str, no_open: bool, no_watch: bool) {
+/// The server restarts itself (see handlers::restart) — the CLI only needs to
+/// trigger it and wait for the replacement to come back up.
+async fn do_restart(port: u16, no_open: bool) {
     let url = format!("http://localhost:{}", port);
 
     if !is_mq_serve_running(&url).await {
@@ -360,14 +300,12 @@ async fn do_restart(port: u16, bind: &str, no_open: bool, no_watch: bool) {
         std::process::exit(1);
     }
 
-    // Signal the current server to exit.
     let _ = reqwest::Client::new()
         .post(format!("{}/api/restart", url))
         .timeout(std::time::Duration::from_secs(2))
         .send()
         .await;
 
-    // Wait for it to go down (up to 5 s).
     for _ in 0..25 {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         if !is_mq_serve_running(&url).await {
@@ -375,31 +313,24 @@ async fn do_restart(port: u16, bind: &str, no_open: bool, no_watch: bool) {
         }
     }
 
-    // Spawn a new background process (session will restore the files).
-    let pid = spawn_background_server(port, bind, no_watch, &[], None, false);
-    let pid_path = pid_file_path(port);
-    let _ = std::fs::write(&pid_path, pid.to_string());
-
     if wait_for_server(&url, 8).await {
         if !no_open {
             let _ = open::that(&url);
         }
-        println!("mq-serve: restarted at {} (pid {})", url, pid);
+        println!("mq-serve: restarted at {}", url);
     } else {
-        let _ = std::fs::remove_file(&pid_path);
         eprintln!("mq-serve: server did not restart in time");
         std::process::exit(1);
     }
 }
 
-async fn clear_session(port: u16, bind: &str, no_watch: bool) {
+async fn clear_session(port: u16) {
     let session_path = session_file_path(port);
     let _ = std::fs::remove_file(&session_path);
     println!("mq-serve: session cleared for port {}", port);
 
     let url = format!("http://localhost:{}", port);
     if is_mq_serve_running(&url).await {
-        // Restart the running server so it picks up the empty session.
         let _ = reqwest::Client::new()
             .post(format!("{}/api/restart", url))
             .timeout(std::time::Duration::from_secs(2))
@@ -413,15 +344,8 @@ async fn clear_session(port: u16, bind: &str, no_watch: bool) {
             }
         }
 
-        let pid = spawn_background_server(port, bind, no_watch, &[], None, false);
-        let pid_path = pid_file_path(port);
-        let _ = std::fs::write(&pid_path, pid.to_string());
-
         if wait_for_server(&url, 8).await {
-            println!(
-                "mq-serve: server restarted with empty session (pid {})",
-                pid
-            );
+            println!("mq-serve: server restarted with empty session");
         }
     }
 }
