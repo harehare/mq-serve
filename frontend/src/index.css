@@ -48,7 +48,7 @@ html, body {
 /* ── Layout ── */
 .app {
   display: grid;
-  grid-template-rows: var(--querybar-h) var(--toolbar-h) 1fr;
+  grid-template-rows: var(--querybar-h) 1fr var(--toolbar-h);
   grid-template-columns: var(--sidebar-w) 1fr;
   height: 100vh;
   overflow: hidden;
@@ -65,6 +65,7 @@ html, body {
 
 /* ── Query bar ── */
 .querybar {
+  grid-row: 1;
   grid-column: 1 / -1;
   display: flex;
   align-items: center;
@@ -75,8 +76,18 @@ html, body {
 }
 
 .querybar-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  flex-shrink: 0;
+  height: 26px;
+  padding: 0 8px 0 10px;
   font-size: 12px;
-  color: var(--text-muted);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: #fff;
+  background: var(--accent);
+  border-radius: 6px;
   white-space: nowrap;
   font-family: var(--font-mono);
 }
@@ -116,6 +127,7 @@ html, body {
 
 /* ── Toolbar ── */
 .toolbar {
+  grid-row: 3;
   grid-column: 2;
   display: flex;
   align-items: center;
@@ -130,15 +142,16 @@ html, body {
 
 .copy-menu {
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   right: 0;
+  margin-bottom: 4px;
   z-index: 100;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 6px;
   padding: 4px 0;
   min-width: 120px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 -4px 12px rgba(0,0,0,0.15);
 }
 
 .copy-menu button {
@@ -267,6 +280,7 @@ html, body {
 /* ── Sidebar ── */
 .sidebar {
   grid-row: 2 / 4;
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   border-right: 1px solid var(--border);
@@ -496,7 +510,8 @@ html, body {
 
 /* ── Preview wrap ── */
 .preview-wrap {
-  grid-row: 2 / 4;
+  grid-row: 2;
+  grid-column: 2;
   display: flex;
   flex-direction: column;
   overflow: hidden;

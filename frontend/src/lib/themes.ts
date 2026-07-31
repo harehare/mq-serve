@@ -87,6 +87,24 @@ export const THEMES: ThemePreset[] = [
       text: '#e0def4', textMuted: '#908caa', accent: '#eb6f92',
     },
   },
+  {
+    id: 'tarn',
+    label: 'Tarn',
+    mode: 'dark',
+    vars: {
+      bg: '#1e293b', surface: '#232e3d', border: '#4a5568',
+      text: '#e2e8f0', textMuted: '#8591a4', accent: '#67b8e3',
+    },
+  },
+  {
+    id: 'tarn-light',
+    label: 'Tarn Light',
+    mode: 'light',
+    vars: {
+      bg: '#f8fafc', surface: '#f1f5f9', border: '#cbd5e1',
+      text: '#0f172a', textMuted: '#64748b', accent: '#0369a1',
+    },
+  },
 ]
 
 export function getTheme(id: string): ThemePreset {

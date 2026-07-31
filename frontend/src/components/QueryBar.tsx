@@ -1,5 +1,5 @@
 import { useRef } from 'react'
-import { X } from 'lucide-react'
+import { X, ChevronRight } from 'lucide-react'
 import type { WsStatus } from '../hooks/useWebSocket'
 
 interface Props {
@@ -15,7 +15,10 @@ export default function QueryBar({ query, onQueryChange, onClear, wsStatus, quer
 
   return (
     <div className="querybar">
-      <label className="querybar-label">mq&gt;</label>
+      <label className="querybar-label">
+        mq
+        <ChevronRight size={13} strokeWidth={3} />
+      </label>
       <input
         ref={inputRef}
         className="query-input"
