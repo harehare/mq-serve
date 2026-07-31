@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     path::PathBuf,
     sync::{
         Arc, Mutex,
@@ -64,11 +64,23 @@ pub async fn serve_asset(uri: Uri) -> Response {
 pub struct AppState {
     /// Include roots (files or directories) supplied at startup or via /api/add.
     pub paths: Arc<std::sync::RwLock<Vec<PathBuf>>>,
+    /// Custom display names for roots, assigned via `-t/--target` or /api/add.
+    pub targets: Arc<std::sync::RwLock<HashMap<String, String>>>,
     pub watch_tx: broadcast::Sender<String>,
     pub connection_count: Arc<AtomicUsize>,
     /// Live watcher – held behind a Mutex so /api/add can register new paths.
     pub watcher: Option<Arc<Mutex<RecommendedWatcher>>>,
     pub port: u16,
+    /// Needed to spawn a replacement process on /api/restart.
+    pub bind: String,
+    pub no_watch: bool,
+    pub allow_remote_access: bool,
+}
+
+fn persist(state: &AppState) {
+    let paths = state.paths.read().unwrap().clone();
+    let targets = state.targets.read().unwrap().clone();
+    save_session(state.port, &paths, &targets);
 }
 
 // ── /api/status ───────────────────────────────────────────────────────────────
@@ -97,6 +109,8 @@ pub async fn get_status(State(state): State<Arc<AppState>>) -> Json<StatusRespon
 #[derive(Deserialize)]
 pub struct AddRequest {
     pub paths: Vec<String>,
+    #[serde(default)]
+    pub target: Option<String>,
 }
 
 pub async fn add_files(
@@ -126,10 +140,60 @@ pub async fn add_files(
         }
     } // RwLock released before any further work
 
-    let snapshot = state.paths.read().unwrap().clone();
-    save_session(state.port, &snapshot);
+    if let Some(target) = &req.target {
+        let mut targets = state.targets.write().unwrap();
+        for p in &new_paths {
+            targets.insert(p.to_string_lossy().into_owned(), target.clone());
+        }
+    }
+
+    persist(&state);
 
     // Notify connected clients to refresh the file list.
+    let msg = serde_json::json!({ "type": "reload" }).to_string();
+    let _ = state.watch_tx.send(msg);
+
+    StatusCode::OK
+}
+
+#[derive(Deserialize)]
+pub struct RemoveRequest {
+    pub paths: Vec<String>,
+}
+
+pub async fn remove_files(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<RemoveRequest>,
+) -> StatusCode {
+    let remove_paths: HashSet<PathBuf> = req
+        .paths
+        .iter()
+        .map(|s| {
+            let p = PathBuf::from(s);
+            p.canonicalize().unwrap_or(p)
+        })
+        .collect();
+
+    {
+        let mut paths = state.paths.write().unwrap();
+        paths.retain(|p| !remove_paths.contains(p));
+        if let Some(watcher) = &state.watcher {
+            let mut w = watcher.lock().unwrap();
+            for p in &remove_paths {
+                let _ = w.unwatch(p);
+            }
+        }
+    }
+
+    {
+        let mut targets = state.targets.write().unwrap();
+        for p in &remove_paths {
+            targets.remove(&p.to_string_lossy().into_owned());
+        }
+    }
+
+    persist(&state);
+
     let msg = serde_json::json!({ "type": "reload" }).to_string();
     let _ = state.watch_tx.send(msg);
 
@@ -183,13 +247,15 @@ fn extract_first_heading(path: &PathBuf) -> Option<String> {
 
 pub async fn list_files(State(state): State<Arc<AppState>>) -> Json<GroupsResponse> {
     let paths = state.paths.read().unwrap().clone();
+    let targets = state.targets.read().unwrap().clone();
     let groups = tokio::task::spawn_blocking(move || {
         paths
             .iter()
             .map(|root| {
-                let name = root
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
+                let name = targets
+                    .get(&root.to_string_lossy().into_owned())
+                    .cloned()
+                    .or_else(|| root.file_name().map(|n| n.to_string_lossy().into_owned()))
                     .unwrap_or_else(|| root.to_string_lossy().into_owned());
 
                 let mut files: Vec<FileEntry> = collect_markdown_files(std::slice::from_ref(root))
@@ -380,10 +446,21 @@ pub async fn search_files(
 
 // ── POST /api/restart ─────────────────────────────────────────────────────────
 
-pub async fn restart() -> StatusCode {
-    // Respond immediately then exit so the process can be restarted cleanly.
-    tokio::spawn(async {
+pub async fn restart(State(state): State<Arc<AppState>>) -> StatusCode {
+    // Respond immediately, then spawn a replacement and exit. Restart has to
+    // spawn its own successor here: this endpoint is also hit directly from
+    // the browser's restart button, which has no external process watching
+    // to bring the server back up the way the CLI's `--restart` flow does.
+    let port = state.port;
+    let bind = state.bind.clone();
+    let no_watch = state.no_watch;
+    let allow_remote_access = state.allow_remote_access;
+    tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        crate::registry::unregister(port);
+        let pid =
+            crate::proc::spawn_background(port, &bind, no_watch, &[], None, allow_remote_access);
+        crate::proc::write_pid_file(port, pid);
         std::process::exit(0);
     });
     StatusCode::OK
@@ -431,14 +508,7 @@ async fn handle_ws(
         }
     }
 
-    let remaining = connection_count.fetch_sub(1, Ordering::SeqCst) - 1;
-    if remaining == 0 {
-        tokio::spawn(async move {
-            tokio::time::sleep(std::time::Duration::from_millis(1000)).await;
-            if connection_count.load(Ordering::SeqCst) == 0 {
-                println!("\nAll tabs closed. Shutting down.");
-                std::process::exit(0);
-            }
-        });
-    }
+    // Closing the last tab does NOT shut the server down: it runs as a
+    // persistent background daemon until explicitly stopped (--stop/--stop-all).
+    connection_count.fetch_sub(1, Ordering::SeqCst);
 }

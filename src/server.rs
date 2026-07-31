@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     path::PathBuf,
     sync::{Arc, Mutex, atomic::AtomicUsize},
@@ -15,32 +15,56 @@ use tracing::info;
 
 use crate::{
     handlers::{
-        AppState, add_files, get_file, get_status, list_files, restart, run_query,
+        AppState, add_files, get_file, get_status, list_files, remove_files, restart, run_query,
         search_files, serve_asset, ws_handler,
     },
+    registry,
     session::{load_session, save_session},
     watcher::spawn_watcher,
 };
 
+fn is_loopback(bind: &str) -> bool {
+    matches!(bind, "127.0.0.1" | "localhost" | "::1")
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn start(
     paths: Vec<PathBuf>,
     port: u16,
     bind: &str,
     no_open: bool,
     no_watch: bool,
+    target: Option<String>,
+    allow_remote_access: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if !is_loopback(bind) && !allow_remote_access {
+        return Err(format!(
+            "refusing to bind to non-loopback address {} without --dangerously-allow-remote-access\n\
+             mq-serve has no authentication; anyone who can reach this address can read your files.",
+            bind
+        )
+        .into());
+    }
+
     // Merge session-persisted paths with command-line paths (session first).
     // If nothing is provided at all, fall back to the current directory.
-    let mut merged: Vec<PathBuf> = load_session(port);
+    let (mut merged, mut targets): (Vec<PathBuf>, HashMap<String, String>) = load_session(port);
     let existing_set: HashSet<PathBuf> = merged.iter().cloned().collect();
+    let mut new_canonical_paths = Vec::new();
     for p in paths {
         let canonical = p.canonicalize().unwrap_or(p);
         if !existing_set.contains(&canonical) {
-            merged.push(canonical);
+            merged.push(canonical.clone());
+            new_canonical_paths.push(canonical);
         }
     }
     if merged.is_empty() {
         merged.push(std::env::current_dir().unwrap_or_default());
+    }
+    if let Some(target) = target {
+        for p in &new_canonical_paths {
+            targets.insert(p.to_string_lossy().into_owned(), target.clone());
+        }
     }
 
     let (watch_tx, _) = broadcast::channel::<String>(128);
@@ -54,20 +78,27 @@ pub async fn start(
     };
 
     let paths_arc = Arc::new(std::sync::RwLock::new(merged.clone()));
+    let targets_arc = Arc::new(std::sync::RwLock::new(targets.clone()));
 
     let state = Arc::new(AppState {
         paths: paths_arc,
+        targets: targets_arc,
         watch_tx,
         connection_count: Arc::new(AtomicUsize::new(0)),
         watcher,
         port,
+        bind: bind.to_string(),
+        no_watch,
+        allow_remote_access,
     });
 
-    save_session(port, &merged);
+    save_session(port, &merged, &targets);
+    registry::register(port, std::process::id(), bind);
 
     let app = Router::new()
         .route("/api/status", get(get_status))
         .route("/api/add", post(add_files))
+        .route("/api/remove", post(remove_files))
         .route("/api/files", get(list_files))
         .route("/api/file", get(get_file))
         .route("/api/query", post(run_query))
@@ -82,14 +113,12 @@ pub async fn start(
     let display_host = if bind == "0.0.0.0" { "localhost" } else { bind };
     let url = format!("http://{}:{}", display_host, port);
 
-    let listener = tokio::net::TcpListener::bind(addr).await?;
+    // On /api/restart the replacement process is spawned before the old one
+    // has released the port, so give it a few seconds to become free.
+    let listener = bind_with_retry(addr).await?;
 
     info!("mq-serve listening on {}", addr);
-    println!(
-        "mq-serve: serving at {} (pid {})",
-        url,
-        std::process::id()
-    );
+    println!("mq-serve: serving at {} (pid {})", url, std::process::id());
     println!("Press Ctrl+C to stop.");
 
     if !no_open {
@@ -103,15 +132,30 @@ pub async fn start(
         });
     }
 
-    tokio::spawn(async {
+    tokio::spawn(async move {
         shutdown_signal().await;
         println!("\nShutting down.");
+        registry::unregister(port);
         std::process::exit(0);
     });
 
     axum::serve(listener, app).await?;
 
     Ok(())
+}
+
+async fn bind_with_retry(addr: SocketAddr) -> std::io::Result<tokio::net::TcpListener> {
+    let mut last_err = None;
+    for _ in 0..20 {
+        match tokio::net::TcpListener::bind(addr).await {
+            Ok(listener) => return Ok(listener),
+            Err(e) => {
+                last_err = Some(e);
+                tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            }
+        }
+    }
+    Err(last_err.unwrap())
 }
 
 async fn shutdown_signal() {

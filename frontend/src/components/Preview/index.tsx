@@ -1,8 +1,11 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { X } from 'lucide-react'
 import type { ParseResult } from '../../lib/markdown'
 import { highlightMarkdown } from '../../lib/markdown'
 import Frontmatter from './Frontmatter'
 import Toc from './Toc'
+
+type ZoomTarget = { kind: 'img'; src: string; alt: string } | { kind: 'html'; html: string }
 
 interface Props {
   parseResult: ParseResult | null
@@ -11,7 +14,6 @@ interface Props {
   wideView: boolean
   showToc: boolean
   onShowTocChange: (v: boolean) => void
-  theme: 'light' | 'dark'
   isLoading: boolean
   openPaths: string[]
   currentPath: string | null
@@ -23,11 +25,11 @@ function fileName(path: string): string {
   return path.split('/').pop() ?? path
 }
 
-export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, onShowTocChange, theme, isLoading, openPaths, currentPath, onTabSelect, onTabClose }: Props) {
+export default function Preview({ parseResult, rawContent, showRaw, wideView, showToc, onShowTocChange, isLoading, openPaths, currentPath, onTabSelect, onTabClose }: Props) {
   const articleRef = useRef<HTMLElement>(null)
   const mainRef = useRef<HTMLDivElement>(null)
-  const mermaidCountRef = useRef(0)
   const [highlightedCode, setHighlightedCode] = useState('')
+  const [zoom, setZoom] = useState<ZoomTarget | null>(null)
 
   // Highlight raw markdown source when Code view is active
   useEffect(() => {
@@ -35,33 +37,30 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
     highlightMarkdown(rawContent).then(setHighlightedCode)
   }, [rawContent, showRaw])
 
-  // Re-render mermaid diagrams after HTML is injected
+  // Click-to-zoom for images and rendered mermaid diagrams.
+  const handlePreviewClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const target = e.target as HTMLElement
+    if (target.tagName === 'IMG') {
+      const img = target as HTMLImageElement
+      setZoom({ kind: 'img', src: img.src, alt: img.alt })
+      return
+    }
+    const mermaidEl = target.closest<HTMLElement>('.mermaid')
+    const svg = mermaidEl?.querySelector('svg')
+    if (svg) {
+      setZoom({ kind: 'html', html: svg.outerHTML })
+    }
+  }, [])
+
+  // Close the zoom overlay on Escape.
   useEffect(() => {
-    const el = articleRef.current
-    if (!el) return
-
-    const diagrams = el.querySelectorAll<HTMLDivElement>('.mermaid[data-mermaid]')
-    if (diagrams.length === 0) return
-
-    import('mermaid').then(({ default: mermaid }) => {
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: theme === 'dark' ? 'dark' : 'default',
-      })
-
-      diagrams.forEach(async (div) => {
-        const code = div.getAttribute('data-mermaid') ?? div.textContent ?? ''
-        const id = `mermaid-${++mermaidCountRef.current}`
-        try {
-          const { svg } = await mermaid.render(id, code)
-          div.innerHTML = svg
-          div.removeAttribute('data-mermaid')
-        } catch (err) {
-          div.textContent = `Mermaid error: ${err}`
-        }
-      })
-    })
-  }, [parseResult?.html, theme])
+    if (!zoom) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setZoom(null)
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [zoom])
 
   const maxWidth = wideView ? '1400px' : '900px'
 
@@ -102,6 +101,7 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
                 ref={articleRef}
                 className="preview"
                 style={{ maxWidth }}
+                onClick={handlePreviewClick}
                 dangerouslySetInnerHTML={{ __html: parseResult?.html ?? '' }}
               />
             </>
@@ -111,6 +111,18 @@ export default function Preview({ parseResult, rawContent, showRaw, wideView, sh
           <Toc headings={parseResult.headings} scrollContainer={mainRef} onClose={() => onShowTocChange(false)} />
         )}
       </div>
+      {zoom && (
+        <div className="zoom-overlay" onClick={() => setZoom(null)}>
+          <button className="zoom-close" aria-label="Close" onClick={() => setZoom(null)}>
+            <X size={20} />
+          </button>
+          {zoom.kind === 'img' ? (
+            <img className="zoom-content" src={zoom.src} alt={zoom.alt} />
+          ) : (
+            <div className="zoom-content zoom-svg" dangerouslySetInnerHTML={{ __html: zoom.html }} />
+          )}
+        </div>
+      )}
     </div>
   )
 }
