@@ -5,6 +5,7 @@ import { useWebSocket } from './hooks/useWebSocket'
 import { useDropzone } from './hooks/useDropzone'
 import { renderMarkdown, type ParseResult } from './lib/markdown'
 import { preprocessMdx } from './lib/mdx'
+import { getTheme, applyTheme } from './lib/themes'
 import QueryBar from './components/QueryBar'
 import Toolbar from './components/Toolbar'
 import Sidebar from './components/Sidebar'
@@ -38,8 +39,9 @@ export default function App() {
 
   const debouncedQuery = useDebounce(session.query, 350)
 
-  const effectiveTheme: 'light' | 'dark' =
+  const effectiveThemeId =
     session.theme === 'system' ? (systemPrefersDark ? 'dark' : 'light') : session.theme
+  const themePreset = getTheme(effectiveThemeId)
 
   // Sync system theme preference
   useEffect(() => {
@@ -51,8 +53,13 @@ export default function App() {
 
   // Apply theme to document
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', effectiveTheme)
-  }, [effectiveTheme])
+    applyTheme(themePreset)
+  }, [themePreset])
+
+  // Apply font size to document
+  useEffect(() => {
+    document.documentElement.setAttribute('data-font-size', session.fontSize)
+  }, [session.fontSize])
 
   const updateSession = useCallback((partial: Partial<Session>) => {
     setSession((prev) => {
@@ -160,7 +167,7 @@ export default function App() {
 
     if (debouncedQuery.trim() === '.' || debouncedQuery.trim() === '') {
       setQueryError('')
-      renderMarkdown(content).then((result) => {
+      renderMarkdown(content, themePreset.mode).then((result) => {
         setParseResult(result)
         setIsLoading(false)
       }).catch(console.error)
@@ -180,7 +187,7 @@ export default function App() {
         } else {
           const result = data.result ?? ''
           setQueryError('')
-          return renderMarkdown(result).then((parsed) => {
+          return renderMarkdown(result, themePreset.mode).then((parsed) => {
             setParseResult(parsed)
             setIsLoading(false)
           })
@@ -190,7 +197,7 @@ export default function App() {
         setQueryError('Network error')
         setIsLoading(false)
       })
-  }, [rawContent, debouncedQuery, session.currentPath])
+  }, [rawContent, debouncedQuery, session.currentPath, themePreset.mode])
 
   // WebSocket live reload
   const wsStatus = useWebSocket(
@@ -269,6 +276,7 @@ export default function App() {
       />
       <Toolbar
         theme={session.theme}
+        effectiveThemeId={effectiveThemeId}
         onThemeChange={(t) => updateSession({ theme: t })}
         sidebarOpen={session.sidebarOpen}
         onSidebarOpenChange={(v) => updateSession({ sidebarOpen: v })}
@@ -278,6 +286,8 @@ export default function App() {
         onShowTocChange={(t) => updateSession({ showToc: t })}
         showRaw={session.showRaw}
         onShowRawChange={(r) => updateSession({ showRaw: r })}
+        fontSize={session.fontSize}
+        onFontSizeChange={(f) => updateSession({ fontSize: f })}
         rawContent={rawContent}
         parseResult={parseResult}
         onRestart={handleRestart}
@@ -299,7 +309,6 @@ export default function App() {
         wideView={session.wideView}
         showToc={session.showToc}
         onShowTocChange={(t) => updateSession({ showToc: t })}
-        theme={effectiveTheme}
         isLoading={isLoading}
         openPaths={session.openPaths}
         currentPath={session.currentPath}

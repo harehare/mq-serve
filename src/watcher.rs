@@ -22,8 +22,8 @@ pub fn spawn_watcher(
                         debug!("file changed: {}", path_str);
                         // Broadcast a pre-serialized JSON message so the WS handler
                         // can forward it without re-wrapping.
-                        let msg = serde_json::json!({ "type": "change", "path": path_str })
-                            .to_string();
+                        let msg =
+                            serde_json::json!({ "type": "change", "path": path_str }).to_string();
                         let _ = tx_inner.send(msg);
                     }
                 }
@@ -75,4 +75,3 @@ pub fn collect_markdown_files(paths: &[PathBuf]) -> Vec<PathBuf> {
     files.dedup();
     files
 }
-

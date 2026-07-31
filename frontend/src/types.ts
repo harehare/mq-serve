@@ -27,10 +27,12 @@ export interface Session {
   openPaths: string[];
   query: string;
   viewMode: "list" | "tree";
-  theme: "light" | "dark" | "system";
+  /** A theme preset id (see lib/themes.ts) or "system". */
+  theme: string;
   wideView: boolean;
   showToc: boolean;
   showRaw: boolean;
+  fontSize: "small" | "medium" | "large" | "xlarge";
   groupOrder: string[];
   fileOrder: Record<string, string[]>;
   sidebarLabel: Record<string, "name" | "heading">;

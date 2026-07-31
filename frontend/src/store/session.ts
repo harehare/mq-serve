@@ -11,6 +11,7 @@ const defaultSession: Session = {
   wideView: false,
   showToc: false,
   showRaw: false,
+  fontSize: "medium",
   groupOrder: [],
   fileOrder: {},
   sidebarLabel: {},

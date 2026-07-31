@@ -2,12 +2,17 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import {
   Sun, Moon, Monitor, ChevronsLeftRight, List,
   Copy, Check, RotateCcw, ChevronDown, AlertCircle, PanelLeft,
+  Minus, Plus,
 } from 'lucide-react'
 import type { Session } from '../types'
 import type { ParseResult } from '../lib/markdown'
+import { THEMES, getTheme } from '../lib/themes'
+
+const FONT_SIZES: Session['fontSize'][] = ['small', 'medium', 'large', 'xlarge']
 
 interface Props {
   theme: Session['theme']
+  effectiveThemeId: string
   onThemeChange: (t: Session['theme']) => void
   sidebarOpen: boolean
   onSidebarOpenChange: (v: boolean) => void
@@ -17,6 +22,8 @@ interface Props {
   onShowTocChange: (s: boolean) => void
   showRaw: boolean
   onShowRawChange: (s: boolean) => void
+  fontSize: Session['fontSize']
+  onFontSizeChange: (f: Session['fontSize']) => void
   rawContent: string
   parseResult: ParseResult | null
   onRestart: () => void
@@ -51,13 +58,16 @@ async function writeToClipboard(text: string): Promise<void> {
 const ICON_SIZE = 15
 
 export default function Toolbar({
-  theme, onThemeChange, sidebarOpen, onSidebarOpenChange,
+  theme, effectiveThemeId, onThemeChange, sidebarOpen, onSidebarOpenChange,
   wideView, onWideViewChange, showToc, onShowTocChange,
-  showRaw, onShowRawChange, rawContent, parseResult, onRestart,
+  showRaw, onShowRawChange, fontSize, onFontSizeChange,
+  rawContent, parseResult, onRestart,
 }: Props) {
   const [copyState, setCopyState] = useState<CopyState>('idle')
   const [showCopyMenu, setShowCopyMenu] = useState(false)
+  const [showThemeMenu, setShowThemeMenu] = useState(false)
   const copyWrapRef = useRef<HTMLDivElement>(null)
+  const themeWrapRef = useRef<HTMLDivElement>(null)
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -70,6 +80,17 @@ export default function Toolbar({
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
   }, [showCopyMenu])
+
+  useEffect(() => {
+    if (!showThemeMenu) return
+    const handler = (e: MouseEvent) => {
+      if (!themeWrapRef.current?.contains(e.target as Node)) {
+        setShowThemeMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showThemeMenu])
 
   const copy = useCallback(async (format: CopyFormat) => {
     let text = ''
@@ -87,12 +108,21 @@ export default function Toolbar({
     setTimeout(() => setCopyState('idle'), 1500)
   }, [rawContent, parseResult])
 
-  const nextTheme: Session['theme'] =
-    theme === 'system' ? 'light' : theme === 'light' ? 'dark' : 'system'
-
-  const ThemeIcon = theme === 'dark' ? Moon : theme === 'light' ? Sun : Monitor
+  const ThemeIcon =
+    theme === 'system' ? Monitor : getTheme(effectiveThemeId).mode === 'dark' ? Moon : Sun
 
   const CopyIcon = copyState === 'copied' ? Check : copyState === 'error' ? AlertCircle : Copy
+
+  const selectTheme = useCallback((t: Session['theme']) => {
+    onThemeChange(t)
+    setShowThemeMenu(false)
+  }, [onThemeChange])
+
+  const fontSizeIndex = FONT_SIZES.indexOf(fontSize)
+  const stepFontSize = useCallback((delta: number) => {
+    const next = FONT_SIZES[Math.min(FONT_SIZES.length - 1, Math.max(0, fontSizeIndex + delta))]
+    onFontSizeChange(next)
+  }, [fontSizeIndex, onFontSizeChange])
 
   return (
     <div className="toolbar">
@@ -103,13 +133,36 @@ export default function Toolbar({
       >
         <PanelLeft size={ICON_SIZE} />
       </button>
-      <button
-        className="bar-btn"
-        onClick={() => onThemeChange(nextTheme)}
-        title={`Theme: ${theme}`}
-      >
-        <ThemeIcon size={ICON_SIZE} />
-      </button>
+      <div className="copy-wrap" ref={themeWrapRef}>
+        <button
+          className="bar-btn"
+          onClick={() => setShowThemeMenu((v) => !v)}
+          title={`Theme: ${theme === 'system' ? 'System' : getTheme(theme).label}`}
+        >
+          <ThemeIcon size={ICON_SIZE} />
+          <ChevronDown size={12} />
+        </button>
+        {showThemeMenu && (
+          <div className="copy-menu theme-menu">
+            <button
+              className={theme === 'system' ? 'active' : ''}
+              onClick={() => selectTheme('system')}
+            >
+              <Monitor size={13} /> System
+            </button>
+            {THEMES.map((t) => (
+              <button
+                key={t.id}
+                className={theme === t.id ? 'active' : ''}
+                onClick={() => selectTheme(t.id)}
+              >
+                <span className="theme-swatch" style={{ background: t.vars.accent }} />
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
       <button
         className={`bar-btn ${wideView ? 'active' : ''}`}
         onClick={() => onWideViewChange(!wideView)}
@@ -136,6 +189,25 @@ export default function Toolbar({
           onClick={() => onShowRawChange(true)}
         >
           Code
+        </button>
+      </div>
+      <div className="font-size-group">
+        <button
+          className="bar-btn icon-btn"
+          onClick={() => stepFontSize(-1)}
+          disabled={fontSizeIndex <= 0}
+          title="Decrease font size"
+        >
+          <Minus size={13} />
+        </button>
+        <span className="font-size-label" title={`Font size: ${fontSize}`}>A</span>
+        <button
+          className="bar-btn icon-btn"
+          onClick={() => stepFontSize(1)}
+          disabled={fontSizeIndex >= FONT_SIZES.length - 1}
+          title="Increase font size"
+        >
+          <Plus size={13} />
         </button>
       </div>
       <div className="copy-wrap" ref={copyWrapRef}>

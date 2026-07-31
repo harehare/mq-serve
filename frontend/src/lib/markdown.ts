@@ -73,6 +73,61 @@ function rehypeMermaid() {
   }
 }
 
+// Turns `> [!NOTE]` blockquotes into styled admonitions.
+const ALERT_INFO: Record<string, { label: string; icon: string }> = {
+  NOTE: { label: 'Note', icon: 'ℹ️' },
+  TIP: { label: 'Tip', icon: '💡' },
+  IMPORTANT: { label: 'Important', icon: '❗' },
+  WARNING: { label: 'Warning', icon: '⚠️' },
+  CAUTION: { label: 'Caution', icon: '🛑' },
+}
+
+const ALERT_MARKER_RE = /^\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]\s*\n?/
+
+function rehypeGithubAlerts() {
+  return (tree: HastRoot) => {
+    visit(tree, 'element', (node: Element) => {
+      if (node.tagName !== 'blockquote') return
+
+      const children = node.children.filter(
+        (c: { type: string; value?: string }) => !(c.type === 'text' && !c.value?.trim())
+      )
+      const first = children[0] as Element | undefined
+      if (!first || first.type !== 'element' || first.tagName !== 'p') return
+
+      const firstText = first.children[0] as { type: string; value?: string } | undefined
+      if (!firstText || firstText.type !== 'text' || typeof firstText.value !== 'string') return
+
+      const match = ALERT_MARKER_RE.exec(firstText.value)
+      if (!match) return
+
+      const type = match[1]
+      const info = ALERT_INFO[type]
+      const remaining = firstText.value.slice(match[0].length)
+
+      if (remaining.trim() === '') {
+        // The marker was alone on its own line: drop that paragraph entirely.
+        node.children = children.slice(1)
+      } else {
+        firstText.value = remaining.replace(/^\n/, '')
+        node.children = children
+      }
+
+      node.tagName = 'div'
+      node.properties = {
+        ...node.properties,
+        className: ['markdown-alert', `markdown-alert-${type.toLowerCase()}`],
+      }
+      node.children.unshift({
+        type: 'element',
+        tagName: 'p',
+        properties: { className: ['markdown-alert-title'] },
+        children: [{ type: 'text', value: `${info.icon} ${info.label}` }],
+      } as Element)
+    })
+  }
+}
+
 function rehypeExtractHeadings() {
   return (tree: HastRoot, file: { data: Record<string, unknown> }) => {
     const headings: Heading[] = []
@@ -136,6 +191,7 @@ function getProcessor(): Promise<ReturnType<typeof unified>> {
         .use(remarkExtractFrontmatter)
         .use(remarkRehype, { allowDangerousHtml: true })
         .use(rehypeMermaid)
+        .use(rehypeGithubAlerts)
         .use(rehypeShikiFromHighlighter, highlighter, {
           themes: { light: 'github-light', dark: 'github-dark' },
           defaultColor: false,
@@ -161,7 +217,40 @@ export async function highlightMarkdown(code: string): Promise<string> {
   })
 }
 
-export async function renderMarkdown(content: string): Promise<ParseResult> {
+// Mermaid diagrams are rendered here, as part of the async pipeline, rather
+// than mutated into the DOM afterwards: a DOM mutation done outside React
+// gets silently discarded the next time a parent re-render touches this
+// article's dangerouslySetInnerHTML (e.g. an unrelated toolbar toggle),
+// leaving the diagram stuck as unrendered text.
+async function renderMermaidDiagrams(html: string, mode: 'light' | 'dark'): Promise<string> {
+  if (!html.includes('data-mermaid')) return html
+
+  const container = document.createElement('div')
+  container.innerHTML = html
+  const diagrams = container.querySelectorAll<HTMLDivElement>('.mermaid[data-mermaid]')
+  if (diagrams.length === 0) return html
+
+  const { default: mermaid } = await import('mermaid')
+  mermaid.initialize({ startOnLoad: false, theme: mode === 'dark' ? 'dark' : 'default' })
+
+  let i = 0
+  for (const div of Array.from(diagrams)) {
+    const code = div.getAttribute('data-mermaid') ?? ''
+    try {
+      const { svg } = await mermaid.render(`mermaid-${Date.now()}-${++i}`, code)
+      div.innerHTML = svg
+      div.removeAttribute('data-mermaid')
+    } catch (err) {
+      div.textContent = `Mermaid error: ${err}`
+    }
+  }
+  return container.innerHTML
+}
+
+export async function renderMarkdown(
+  content: string,
+  themeMode: 'light' | 'dark' = 'light'
+): Promise<ParseResult> {
   // Pre-load any languages referenced in fenced code blocks before rendering.
   const fencedLangRe = /^```(\w[-\w]*)/gm
   const langs = new Set<string>()
@@ -174,9 +263,10 @@ export async function renderMarkdown(content: string): Promise<ParseResult> {
   const processor = await getProcessor()
   const file = await processor.process(content)
   const data = file.data as Record<string, unknown>
+  const html = await renderMermaidDiagrams(String(file), themeMode)
 
   return {
-    html: String(file),
+    html,
     frontmatter: (data['frontmatter'] as Record<string, unknown> | null) ?? null,
     headings: (data['headings'] as Heading[]) ?? [],
   }

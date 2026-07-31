@@ -1,5 +1,6 @@
 mod cli;
 mod handlers;
+mod registry;
 mod server;
 mod session;
 mod watcher;
@@ -12,6 +13,7 @@ use std::{
 
 use clap::Parser;
 use cli::Cli;
+use serde::Serialize;
 use session::session_file_path;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -24,15 +26,25 @@ async fn main() {
 
     let cli = Cli::parse();
 
-    // ── single-action flags ───────────────────────────────────────────────────
-
     if cli.status {
-        show_status(cli.port).await;
+        show_status(cli.json).await;
+        return;
+    }
+
+    if cli.stop_all {
+        stop_all_servers().await;
         return;
     }
 
     if cli.stop {
         stop_server(cli.port).await;
+        return;
+    }
+
+    if !cli.close.is_empty() || !cli.unwatch.is_empty() {
+        let mut paths = cli.close.clone();
+        paths.extend(cli.unwatch.clone());
+        close_paths(cli.port, &paths).await;
         return;
     }
 
@@ -46,11 +58,7 @@ async fn main() {
         return;
     }
 
-    // ── read stdin if piped ───────────────────────────────────────────────────
-
     let stdin_path = read_stdin_to_tempfile();
-
-    // ── resolve CLI paths ────────────────────────────────────────────────────
 
     let mut paths: Vec<PathBuf> = cli
         .paths
@@ -66,11 +74,9 @@ async fn main() {
 
     let url = format!("http://localhost:{}", cli.port);
 
-    // ── if a server is already running, add files to it ───────────────────────
-
     if is_mq_serve_running(&url).await {
         if !paths.is_empty() {
-            match add_paths_to_server(&url, &paths).await {
+            match add_paths_to_server(&url, &paths, cli.target.clone()).await {
                 Ok(()) => println!("mq-serve: added files to {}", url),
                 Err(e) => {
                     eprintln!("mq-serve: failed to add files: {}", e);
@@ -78,24 +84,47 @@ async fn main() {
                 }
             }
         }
-        if !cli.no_open {
+        if !cli.no_open || cli.open {
             let _ = open::that(&url);
         }
         return;
     }
 
-    // ── start a new server ────────────────────────────────────────────────────
+    if !is_loopback(&cli.bind) && !cli.dangerously_allow_remote_access {
+        eprintln!(
+            "mq-serve: refusing to bind to non-loopback address {} without --dangerously-allow-remote-access\n\
+             mq-serve has no authentication; anyone who can reach this address can read your files.",
+            cli.bind
+        );
+        std::process::exit(1);
+    }
 
     let run_foreground = cli.foreground || cli.daemon;
 
     if run_foreground {
-        if let Err(e) = server::start(paths, cli.port, &cli.bind, cli.no_open, cli.no_watch).await
+        if let Err(e) = server::start(
+            paths,
+            cli.port,
+            &cli.bind,
+            cli.no_open,
+            cli.no_watch,
+            cli.target.clone(),
+            cli.dangerously_allow_remote_access,
+        )
+        .await
         {
             eprintln!("Error: {}", e);
             std::process::exit(1);
         }
     } else {
-        let pid = spawn_background_server(cli.port, &cli.bind, cli.no_watch, &paths);
+        let pid = spawn_background_server(
+            cli.port,
+            &cli.bind,
+            cli.no_watch,
+            &paths,
+            cli.target.clone(),
+            cli.dangerously_allow_remote_access,
+        );
         let pid_path = pid_file_path(cli.port);
         let _ = std::fs::write(&pid_path, pid.to_string());
 
@@ -112,7 +141,9 @@ async fn main() {
     }
 }
 
-// ── stdin helper ──────────────────────────────────────────────────────────────
+fn is_loopback(bind: &str) -> bool {
+    matches!(bind, "127.0.0.1" | "localhost" | "::1")
+}
 
 fn read_stdin_to_tempfile() -> Option<PathBuf> {
     use std::io::IsTerminal;
@@ -132,15 +163,14 @@ fn read_stdin_to_tempfile() -> Option<PathBuf> {
     Some(path)
 }
 
-// ── background spawn ──────────────────────────────────────────────────────────
-
-/// Spawn a new background server process and return its PID.
 /// The child always gets --foreground and --no-open so the parent owns browser-open.
 fn spawn_background_server(
     port: u16,
     bind: &str,
     no_watch: bool,
     paths: &[PathBuf],
+    target: Option<String>,
+    allow_remote_access: bool,
 ) -> u32 {
     let exe = std::env::current_exe().expect("failed to get current executable path");
     let mut args = vec![
@@ -153,6 +183,13 @@ fn spawn_background_server(
     ];
     if no_watch {
         args.push("--no-watch".to_string());
+    }
+    if let Some(target) = target {
+        args.push("--target".to_string());
+        args.push(target);
+    }
+    if allow_remote_access {
+        args.push("--dangerously-allow-remote-access".to_string());
     }
     for p in paths {
         args.push(p.to_string_lossy().into_owned());
@@ -169,8 +206,6 @@ fn spawn_background_server(
 
     child.id()
 }
-
-// ── HTTP helpers ──────────────────────────────────────────────────────────────
 
 fn pid_file_path(port: u16) -> PathBuf {
     std::env::temp_dir().join(format!("mq-serve-{}.pid", port))
@@ -195,7 +230,11 @@ async fn is_mq_serve_running(url: &str) -> bool {
     }
 }
 
-async fn add_paths_to_server(url: &str, paths: &[PathBuf]) -> Result<(), String> {
+async fn add_paths_to_server(
+    url: &str,
+    paths: &[PathBuf],
+    target: Option<String>,
+) -> Result<(), String> {
     let path_strings: Vec<String> = paths
         .iter()
         .map(|p| p.to_string_lossy().into_owned())
@@ -203,6 +242,24 @@ async fn add_paths_to_server(url: &str, paths: &[PathBuf]) -> Result<(), String>
 
     reqwest::Client::new()
         .post(format!("{}/api/add", url))
+        .json(&serde_json::json!({ "paths": path_strings, "target": target }))
+        .timeout(std::time::Duration::from_secs(5))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+async fn remove_paths_from_server(url: &str, paths: &[PathBuf]) -> Result<(), String> {
+    let path_strings: Vec<String> = paths
+        .iter()
+        .map(|p| p.canonicalize().unwrap_or_else(|_| p.clone()))
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+
+    reqwest::Client::new()
+        .post(format!("{}/api/remove", url))
         .json(&serde_json::json!({ "paths": path_strings }))
         .timeout(std::time::Duration::from_secs(5))
         .send()
@@ -224,34 +281,72 @@ async fn wait_for_server(url: &str, timeout_secs: u64) -> bool {
     false
 }
 
-// ── action handlers ───────────────────────────────────────────────────────────
+fn kill_pid(pid: u32) {
+    #[cfg(unix)]
+    {
+        let _ = std::process::Command::new("kill")
+            .arg(pid.to_string())
+            .status();
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &pid.to_string(), "/F"])
+            .status();
+    }
+}
 
 async fn stop_server(port: u16) {
     let pid_path = pid_file_path(port);
-    match std::fs::read_to_string(&pid_path) {
-        Ok(pid_str) => {
-            let pid: u32 = pid_str.trim().parse().expect("invalid PID in file");
-            #[cfg(unix)]
-            {
-                let _ = std::process::Command::new("kill")
-                    .arg(pid.to_string())
-                    .status();
-            }
-            #[cfg(not(unix))]
-            {
-                let _ = std::process::Command::new("taskkill")
-                    .args(["/PID", &pid.to_string(), "/F"])
-                    .status();
-            }
+    let pid_from_file = std::fs::read_to_string(&pid_path)
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok());
+    let pid_from_registry = registry::list_live()
+        .into_iter()
+        .find(|e| e.port == port)
+        .map(|e| e.pid);
+
+    match pid_from_registry.or(pid_from_file) {
+        Some(pid) => {
+            kill_pid(pid);
             let _ = std::fs::remove_file(&pid_path);
+            registry::unregister(port);
             println!("Stopped mq-serve (PID: {})", pid);
         }
-        Err(_) => {
-            eprintln!(
-                "No background mq-serve found for port {}.\nPID file not found: {}",
-                port,
-                pid_path.display()
-            );
+        None => {
+            eprintln!("No mq-serve server found for port {}.", port);
+            std::process::exit(1);
+        }
+    }
+}
+
+async fn stop_all_servers() {
+    let entries = registry::list_live();
+    if entries.is_empty() {
+        println!("No mq-serve servers running.");
+        return;
+    }
+    for entry in entries {
+        kill_pid(entry.pid);
+        let _ = std::fs::remove_file(pid_file_path(entry.port));
+        registry::unregister(entry.port);
+        println!(
+            "Stopped mq-serve on port {} (PID: {})",
+            entry.port, entry.pid
+        );
+    }
+}
+
+async fn close_paths(port: u16, paths: &[PathBuf]) {
+    let url = format!("http://localhost:{}", port);
+    if !is_mq_serve_running(&url).await {
+        eprintln!("mq-serve: no server running on port {}", port);
+        std::process::exit(1);
+    }
+    match remove_paths_from_server(&url, paths).await {
+        Ok(()) => println!("mq-serve: removed {} path(s) from {}", paths.len(), url),
+        Err(e) => {
+            eprintln!("mq-serve: failed to remove files: {}", e);
             std::process::exit(1);
         }
     }
@@ -281,7 +376,7 @@ async fn do_restart(port: u16, bind: &str, no_open: bool, no_watch: bool) {
     }
 
     // Spawn a new background process (session will restore the files).
-    let pid = spawn_background_server(port, bind, no_watch, &[]);
+    let pid = spawn_background_server(port, bind, no_watch, &[], None, false);
     let pid_path = pid_file_path(port);
     let _ = std::fs::write(&pid_path, pid.to_string());
 
@@ -318,52 +413,97 @@ async fn clear_session(port: u16, bind: &str, no_watch: bool) {
             }
         }
 
-        let pid = spawn_background_server(port, bind, no_watch, &[]);
+        let pid = spawn_background_server(port, bind, no_watch, &[], None, false);
         let pid_path = pid_file_path(port);
         let _ = std::fs::write(&pid_path, pid.to_string());
 
         if wait_for_server(&url, 8).await {
-            println!("mq-serve: server restarted with empty session (pid {})", pid);
+            println!(
+                "mq-serve: server restarted with empty session (pid {})",
+                pid
+            );
         }
     }
 }
 
-async fn show_status(port: u16) {
-    let url = format!("http://localhost:{}", port);
-    let pid_path = pid_file_path(port);
-    let pid = std::fs::read_to_string(&pid_path)
-        .ok()
-        .and_then(|s| s.trim().parse::<u32>().ok());
+#[derive(Serialize)]
+struct StatusRow {
+    url: String,
+    port: u16,
+    pid: u32,
+    bind: String,
+    version: Option<String>,
+    file_count: Option<u64>,
+    started_at: u64,
+}
 
-    match reqwest::Client::new()
-        .get(format!("{}/api/status", url))
-        .timeout(std::time::Duration::from_secs(2))
-        .send()
-        .await
-    {
-        Ok(resp) => {
-            if let Ok(json) = resp.json::<serde_json::Value>().await {
-                let version = json.get("version").and_then(|v| v.as_str()).unwrap_or("?");
-                let file_count = json
-                    .get("file_count")
-                    .and_then(|v| v.as_u64())
-                    .unwrap_or(0);
-                let pid_str = pid
-                    .map(|p| format!(", pid {}", p))
-                    .unwrap_or_default();
-                println!("{} (v{}{})", url, version, pid_str);
-                println!("  {} file(s)", file_count);
-            } else {
-                println!("{}: running", url);
-            }
+/// Shows every mq-serve server currently running on this machine, regardless
+/// of which directory or port this invocation happens to be in.
+async fn show_status(json: bool) {
+    let entries = registry::list_live();
+
+    if entries.is_empty() {
+        if json {
+            println!("[]");
+        } else {
+            println!("No mq-serve servers running.");
         }
-        Err(_) => {
-            // Clean up stale PID file.
-            if pid_path.exists() {
-                let _ = std::fs::remove_file(&pid_path);
-            }
-            eprintln!("No mq-serve server running on port {}", port);
-            std::process::exit(1);
-        }
+        return;
+    }
+
+    let mut rows = Vec::new();
+    for entry in entries {
+        let host = if entry.bind == "0.0.0.0" {
+            "localhost"
+        } else {
+            entry.bind.as_str()
+        };
+        let url = format!("http://{}:{}", host, entry.port);
+
+        let (version, file_count) = match reqwest::Client::new()
+            .get(format!("{}/api/status", url))
+            .timeout(std::time::Duration::from_secs(2))
+            .send()
+            .await
+        {
+            Ok(resp) => match resp.json::<serde_json::Value>().await {
+                Ok(json) => (
+                    json.get("version")
+                        .and_then(|v| v.as_str())
+                        .map(String::from),
+                    json.get("file_count").and_then(|v| v.as_u64()),
+                ),
+                Err(_) => (None, None),
+            },
+            Err(_) => (None, None),
+        };
+
+        rows.push(StatusRow {
+            url,
+            port: entry.port,
+            pid: entry.pid,
+            bind: entry.bind,
+            version,
+            file_count,
+            started_at: entry.started_at,
+        });
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&rows).unwrap_or_default()
+        );
+        return;
+    }
+
+    for row in &rows {
+        let version = row.version.as_deref().unwrap_or("?");
+        let files = row
+            .file_count
+            .map(|c| format!("{} file(s)", c))
+            .unwrap_or_else(|| "unreachable".to_string());
+        println!("{} (v{}, pid {})", row.url, version, row.pid);
+        println!("  {}", files);
     }
 }
