@@ -198,7 +198,8 @@ The running server exposes the same thing over HTTP:
 | ---------------- | ----------------------------------------- |
 | `.h`             | Extract all headings                      |
 | `.code`          | Extract all code blocks                   |
-| `.p`             | Extract all paragraphs                    |
+| `.link`          | Extract all links                         |
+| `.list`          | Extract all lists                         |
 | `.h \| upcase()` | Extract headings and convert to uppercase |
 
 Type a query in the bar at the top of the page; it runs as you type.
