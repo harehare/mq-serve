@@ -32,4 +32,5 @@ tokio = {version = "1", features = ["full"]}
 tower-http = {version = "0.7", features = ["cors"]}
 tracing = "0.1"
 tracing-subscriber = {version = "0.3", features = ["env-filter", "fmt"]}
+globset = "0.4.20"
 

@@ -6,7 +6,7 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(name = "mq-serve", version, about)]
 pub struct Cli {
-    /// Markdown files or directories to serve.
+    /// Markdown files, directories or glob patterns to serve.
     /// Defaults to the current directory.
     #[arg(value_name = "FILES_OR_DIRS")]
     pub paths: Vec<PathBuf>,
@@ -25,8 +25,8 @@ pub struct Cli {
 
     /// Required together with a non-loopback --bind to confirm the server
     /// should be reachable from the network (it has no authentication).
-    #[arg(long)]
-    pub dangerously_allow_remote_access: bool,
+    #[arg(long = "dangerously-allow-remote")]
+    pub allow_remote: bool,
 
     /// Do not automatically open the browser.
     #[arg(long)]
@@ -61,7 +61,12 @@ pub struct Cli {
     #[arg(long)]
     pub status: bool,
 
-    /// Output --status as JSON instead of human-readable text.
+    /// Run an mq query against the given files/directories/glob patterns and
+    /// print the result to stdout instead of starting a server.
+    #[arg(long, short = 'q', value_name = "QUERY")]
+    pub query: Option<String>,
+
+    /// Output --status or --query results as JSON instead of human-readable text.
     #[arg(long)]
     pub json: bool,
 
@@ -69,6 +74,12 @@ pub struct Cli {
     /// If a server is running it will be restarted with an empty session.
     #[arg(long)]
     pub clear: bool,
+
+    /// Add one or more files, directories or glob patterns to watch. Same as
+    /// passing them as positional arguments, but unambiguous for quoted
+    /// patterns such as --watch "docs/**/*.md".
+    #[arg(long, short = 'w', value_name = "PATTERN", num_args = 1..)]
+    pub watch: Vec<PathBuf>,
 
     /// Remove one or more files/directories from the running session on the given port.
     #[arg(long, value_name = "PATH", num_args = 1..)]

@@ -61,7 +61,15 @@ mq-serve docs/ -p 8080
 
 # Bind to all interfaces (e.g. inside Docker) — requires an explicit opt-in,
 # since mq-serve has no authentication and anyone reaching the address can read your files
-mq-serve docs/ --bind 0.0.0.0 --dangerously-allow-remote-access
+mq-serve docs/ --bind 0.0.0.0 --dangerously-allow-remote
+
+# Glob patterns (quote them so the shell does not expand them first).
+# New files that match the pattern are picked up automatically.
+mq-serve "docs/**/*.md"
+mq-serve "notes/*.md" -t "Notes"
+
+# --watch / -w does the same as passing the pattern as an argument; handy for scripts
+mq-serve --watch "docs/**/*.md"
 
 # Run in the foreground (e.g. in a container or for debugging)
 mq-serve docs/ --foreground
@@ -118,7 +126,8 @@ mq-serve --stop-all         # stop every mq-serve server currently running
 mq-serve --restart                    # restart the server (session is preserved)
 mq-serve --clear                      # clear the saved session (restarts server if running)
 mq-serve --close old-draft.md         # remove a file/directory from the running session
-mq-serve --unwatch docs/              # alias for --close, for directories you no longer want watched
+mq-serve --unwatch docs/              # alias for --close, for directories or patterns you no longer want watched
+mq-serve --close "docs/**/*.md"        # remove a glob pattern (pass it exactly as you added it)
 mq-serve --restart -p 7701            # restart/clear/close on a specific port
 ```
 
@@ -126,7 +135,7 @@ mq-serve --restart -p 7701            # restart/clear/close on a specific port
 
 ```
 Arguments:
-  [FILES_OR_DIRS]...  Markdown files or directories to serve. Defaults to the current directory
+  [FILES_OR_DIRS]...  Markdown files, directories or glob patterns to serve. Defaults to the current directory
 
 Options:
   -t, --target <NAME>
@@ -135,7 +144,7 @@ Options:
           Port to listen on [default: 7700]
   -b, --bind <BIND>
           Address to bind to [default: 127.0.0.1]
-      --dangerously-allow-remote-access
+      --dangerously-allow-remote
           Required together with a non-loopback --bind to confirm the server should be reachable from the network (it has no authentication)
       --no-open
           Do not automatically open the browser
@@ -143,6 +152,8 @@ Options:
           Always open the browser, even when adding files to an already-running server
       --no-watch
           Disable file-change watching
+  -w, --watch <PATTERN>...
+          Add one or more files, directories or glob patterns to watch. Same as passing them as positional arguments, but unambiguous for quoted patterns such as --watch "docs/**/*.md"
   -f, --foreground
           Run in the foreground instead of the background (default is background)
       --stop
@@ -167,17 +178,44 @@ Options:
           Print version
 ```
 
+## Querying from the CLI
+
+`-q/--query` runs an mq query without starting a server and prints the result to stdout. It accepts the same files, directories and glob patterns as the server, or piped stdin.
+
+```bash
+mq-serve -q '.h' docs/                    # headings of every file under docs/
+mq-serve -q '.code' "docs/**/*.md" --json # JSON: [{ "path", "name", "result" }, ...]
+cat notes.md | mq-serve -q '.h1'
+```
+
+Files for which the query produces no output are skipped. The exit status is 1 if the query is invalid.
+
+The running server exposes the same thing over HTTP:
+
+| Endpoint | Body | Effect |
+| -------- | ---- | ------ |
+| `POST /api/query` | `{ "path": "...", "query": "..." }` or `{ "content": "...", "query": "..." }` | Query one served file or raw Markdown |
+| `POST /api/query-all` | `{ "query": "..." }` | Query every served file |
+
 ## mq Query Examples
 
 | Query            | Effect                                    |
 | ---------------- | ----------------------------------------- |
 | `.h`             | Extract all headings                      |
 | `.code`          | Extract all code blocks                   |
-| `.p`             | Extract all paragraphs                    |
+| `.link`          | Extract all links                         |
+| `.list`          | Extract all lists                         |
 | `.h \| upcase()` | Extract headings and convert to uppercase |
 
-Enter a query in the bar at the top of the page and press Enter.
-Click **Clear** to reset to the original content.
+Type a query in the bar at the top of the page; it runs as you type.
+Click **×** to reset to the original content.
+
+The buttons next to the query box:
+
+- **★ Save**: keep the current query in your saved list
+- **History / presets menu**: pick from saved queries, recent queries, or built-in presets (headings, code blocks, links, unchecked tasks, ...)
+- **Layers (all files)**: run the query against every served file and show the matches grouped by file, instead of only the open file
+- **Link**: copy a URL that reopens the viewer with the same query, e.g. `http://localhost:7700/?q=.code&all=1`. The address bar is kept in sync, so reloading keeps your query too.
 
 ## Development
 

@@ -40,7 +40,7 @@ pub fn load_session(port: u16) -> (Vec<PathBuf>, HashMap<String, String>) {
         .paths
         .into_iter()
         .map(PathBuf::from)
-        .filter(|p| p.exists())
+        .filter(|p| crate::paths::is_live(p))
         .collect();
     (paths, data.targets)
 }

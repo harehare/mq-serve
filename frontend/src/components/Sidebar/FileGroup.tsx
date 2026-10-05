@@ -60,7 +60,7 @@ export default function FileGroup({ group, currentPath, session, onSessionUpdate
     onSessionUpdate({ sidebarLabel: { ...session.sidebarLabel, [group.root]: next } })
   }
 
-  const tree = viewMode === 'tree' ? buildTree(group.root, group.files) : null
+  const tree = viewMode === 'tree' ? buildTree(group.base ?? group.root, group.files) : null
 
   return (
     <div className="file-group">

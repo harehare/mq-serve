@@ -33,7 +33,7 @@ pub fn spawn_watcher(
     })?;
 
     for path in paths {
-        watcher.watch(path, RecursiveMode::Recursive)?;
+        watcher.watch(&crate::paths::watch_target(path), RecursiveMode::Recursive)?;
     }
 
     Ok(watcher)
@@ -58,13 +58,23 @@ pub fn collect_markdown_files(paths: &[PathBuf]) -> Vec<PathBuf> {
             continue;
         }
 
-        if !path.is_dir() {
+        let pattern = if crate::paths::is_pattern(path) {
+            let Some(m) = crate::paths::matcher(path) else {
+                continue;
+            };
+            Some(m)
+        } else if path.is_dir() {
+            None
+        } else {
             continue;
-        }
+        };
+        let walk_root = crate::paths::watch_target(path);
 
-        for result in WalkBuilder::new(path).build() {
+        for result in WalkBuilder::new(walk_root).build() {
             let Ok(entry) = result else { continue };
-            if entry.file_type().map(|t| t.is_file()).unwrap_or(false) && is_markdown(entry.path())
+            if entry.file_type().map(|t| t.is_file()).unwrap_or(false)
+                && is_markdown(entry.path())
+                && pattern.as_ref().is_none_or(|m| m.is_match(entry.path()))
             {
                 files.push(entry.path().to_path_buf());
             }

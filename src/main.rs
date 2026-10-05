@@ -1,6 +1,8 @@
 mod cli;
 mod handlers;
+mod paths;
 mod proc;
+mod query;
 mod registry;
 mod server;
 mod session;
@@ -30,6 +32,11 @@ async fn main() {
 
     if cli.status {
         show_status(cli.json).await;
+        return;
+    }
+
+    if let Some(query) = &cli.query {
+        run_cli_query(&cli.paths, query, cli.json);
         return;
     }
 
@@ -65,13 +72,14 @@ async fn main() {
     let mut paths: Vec<PathBuf> = cli
         .paths
         .iter()
-        .map(|p| p.canonicalize().unwrap_or_else(|_| p.clone()))
+        .chain(&cli.watch)
+        .map(|p| paths::normalize(p))
         .collect();
 
-    if let Some(p) = stdin_path {
-        if !paths.contains(&p) {
-            paths.push(p);
-        }
+    if let Some(p) = stdin_path
+        && !paths.contains(&p)
+    {
+        paths.push(p);
     }
 
     let url = format!("http://localhost:{}", cli.port);
@@ -92,9 +100,9 @@ async fn main() {
         return;
     }
 
-    if !is_loopback(&cli.bind) && !cli.dangerously_allow_remote_access {
+    if !is_loopback(&cli.bind) && !cli.allow_remote {
         eprintln!(
-            "mq-serve: refusing to bind to non-loopback address {} without --dangerously-allow-remote-access\n\
+            "mq-serve: refusing to bind to non-loopback address {} without --dangerously-allow-remote\n\
              mq-serve has no authentication; anyone who can reach this address can read your files.",
             cli.bind
         );
@@ -111,7 +119,7 @@ async fn main() {
             cli.no_open,
             cli.no_watch,
             cli.target.clone(),
-            cli.dangerously_allow_remote_access,
+            cli.allow_remote,
         )
         .await
         {
@@ -125,7 +133,7 @@ async fn main() {
             cli.no_watch,
             &paths,
             cli.target.clone(),
-            cli.dangerously_allow_remote_access,
+            cli.allow_remote,
         );
         write_pid_file(cli.port, pid);
 
@@ -138,6 +146,47 @@ async fn main() {
             let _ = std::fs::remove_file(pid_file_path(cli.port));
             eprintln!("mq-serve: server did not start in time");
             std::process::exit(1);
+        }
+    }
+}
+
+/// Runs `query` against the given roots (the current directory when none are
+/// given, or piped stdin) and prints the results. Exits with status 1 if the
+/// query fails.
+fn run_cli_query(paths: &[PathBuf], query: &str, json: bool) {
+    let mut roots: Vec<PathBuf> = paths.iter().map(|p| paths::normalize(p)).collect();
+    if let Some(stdin) = read_stdin_to_tempfile() {
+        roots.push(stdin);
+    }
+    if roots.is_empty() {
+        roots.push(std::env::current_dir().unwrap_or_default());
+    }
+
+    let multi = query::query_files(&roots, query);
+    if let Some(error) = &multi.error {
+        eprintln!("mq-serve: {}", error);
+        std::process::exit(1);
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&multi.results).unwrap_or_default()
+        );
+        return;
+    }
+
+    let show_names = multi.results.len() > 1;
+    for (i, file) in multi.results.iter().enumerate() {
+        if show_names {
+            if i > 0 {
+                println!();
+            }
+            println!("==> {} <==", file.path);
+        }
+        print!("{}", file.result);
+        if !file.result.ends_with('\n') {
+            println!();
         }
     }
 }
@@ -207,7 +256,7 @@ async fn add_paths_to_server(
 async fn remove_paths_from_server(url: &str, paths: &[PathBuf]) -> Result<(), String> {
     let path_strings: Vec<String> = paths
         .iter()
-        .map(|p| p.canonicalize().unwrap_or_else(|_| p.clone()))
+        .map(|p| paths::normalize(p))
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
 
