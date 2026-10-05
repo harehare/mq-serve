@@ -38,4 +38,19 @@ export interface Session {
   fileOrder: Record<string, string[]>;
   sidebarLabel: Record<string, "name" | "heading">;
   sidebarOpen: boolean;
+  /** Run the query against every served file instead of the open one. */
+  queryAll: boolean;
+  queryHistory: string[];
+  savedQueries: string[];
+}
+
+export interface FileQueryResult {
+  path: string;
+  name: string;
+  result: string;
+}
+
+export interface MultiQueryResponse {
+  results: FileQueryResult[];
+  error?: string;
 }

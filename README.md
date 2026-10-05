@@ -201,8 +201,15 @@ The running server exposes the same thing over HTTP:
 | `.p`             | Extract all paragraphs                    |
 | `.h \| upcase()` | Extract headings and convert to uppercase |
 
-Enter a query in the bar at the top of the page and press Enter.
-Click **Clear** to reset to the original content.
+Type a query in the bar at the top of the page; it runs as you type.
+Click **×** to reset to the original content.
+
+The buttons next to the query box:
+
+- **★ Save**: keep the current query in your saved list
+- **History / presets menu**: pick from saved queries, recent queries, or built-in presets (headings, code blocks, links, unchecked tasks, ...)
+- **Layers (all files)**: run the query against every served file and show the matches grouped by file, instead of only the open file
+- **Link**: copy a URL that reopens the viewer with the same query, e.g. `http://localhost:7700/?q=.code&all=1`. The address bar is kept in sync, so reloading keeps your query too.
 
 ## Development
 

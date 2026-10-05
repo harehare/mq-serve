@@ -16,6 +16,9 @@ const defaultSession: Session = {
   fileOrder: {},
   sidebarLabel: {},
   sidebarOpen: true,
+  queryAll: false,
+  queryHistory: [],
+  savedQueries: [],
 };
 
 export function loadSession(): Session {
