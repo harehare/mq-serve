@@ -72,13 +72,14 @@ async fn main() {
     let mut paths: Vec<PathBuf> = cli
         .paths
         .iter()
+        .chain(&cli.watch)
         .map(|p| paths::normalize(p))
         .collect();
 
-    if let Some(p) = stdin_path {
-        if !paths.contains(&p) {
-            paths.push(p);
-        }
+    if let Some(p) = stdin_path
+        && !paths.contains(&p)
+    {
+        paths.push(p);
     }
 
     let url = format!("http://localhost:{}", cli.port);

@@ -68,6 +68,9 @@ mq-serve docs/ --bind 0.0.0.0 --dangerously-allow-remote
 mq-serve "docs/**/*.md"
 mq-serve "notes/*.md" -t "Notes"
 
+# --watch / -w does the same as passing the pattern as an argument; handy for scripts
+mq-serve --watch "docs/**/*.md"
+
 # Run in the foreground (e.g. in a container or for debugging)
 mq-serve docs/ --foreground
 
@@ -123,7 +126,7 @@ mq-serve --stop-all         # stop every mq-serve server currently running
 mq-serve --restart                    # restart the server (session is preserved)
 mq-serve --clear                      # clear the saved session (restarts server if running)
 mq-serve --close old-draft.md         # remove a file/directory from the running session
-mq-serve --unwatch docs/              # alias for --close, for directories you no longer want watched
+mq-serve --unwatch docs/              # alias for --close, for directories or patterns you no longer want watched
 mq-serve --close "docs/**/*.md"        # remove a glob pattern (pass it exactly as you added it)
 mq-serve --restart -p 7701            # restart/clear/close on a specific port
 ```
@@ -149,6 +152,8 @@ Options:
           Always open the browser, even when adding files to an already-running server
       --no-watch
           Disable file-change watching
+  -w, --watch <PATTERN>...
+          Add one or more files, directories or glob patterns to watch. Same as passing them as positional arguments, but unambiguous for quoted patterns such as --watch "docs/**/*.md"
   -f, --foreground
           Run in the foreground instead of the background (default is background)
       --stop

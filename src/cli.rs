@@ -75,6 +75,12 @@ pub struct Cli {
     #[arg(long)]
     pub clear: bool,
 
+    /// Add one or more files, directories or glob patterns to watch. Same as
+    /// passing them as positional arguments, but unambiguous for quoted
+    /// patterns such as --watch "docs/**/*.md".
+    #[arg(long, short = 'w', value_name = "PATTERN", num_args = 1..)]
+    pub watch: Vec<PathBuf>,
+
     /// Remove one or more files/directories from the running session on the given port.
     #[arg(long, value_name = "PATH", num_args = 1..)]
     pub close: Vec<PathBuf>,
