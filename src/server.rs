@@ -39,7 +39,7 @@ pub async fn start(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !is_loopback(bind) && !allow_remote_access {
         return Err(format!(
-            "refusing to bind to non-loopback address {} without --dangerously-allow-remote-access\n\
+            "refusing to bind to non-loopback address {} without --dangerously-allow-remote\n\
              mq-serve has no authentication; anyone who can reach this address can read your files.",
             bind
         )
@@ -52,7 +52,7 @@ pub async fn start(
     let existing_set: HashSet<PathBuf> = merged.iter().cloned().collect();
     let mut new_canonical_paths = Vec::new();
     for p in paths {
-        let canonical = p.canonicalize().unwrap_or(p);
+        let canonical = crate::paths::normalize(&p);
         if !existing_set.contains(&canonical) {
             merged.push(canonical.clone());
             new_canonical_paths.push(canonical);

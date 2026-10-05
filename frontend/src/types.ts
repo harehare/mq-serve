@@ -7,6 +7,7 @@ export interface FileEntry {
 
 export interface FileGroup {
   root: string;
+  base?: string;
   name: string;
   files: FileEntry[];
 }

@@ -6,7 +6,7 @@ use clap::Parser;
 #[derive(Parser, Debug)]
 #[command(name = "mq-serve", version, about)]
 pub struct Cli {
-    /// Markdown files or directories to serve.
+    /// Markdown files, directories or glob patterns to serve.
     /// Defaults to the current directory.
     #[arg(value_name = "FILES_OR_DIRS")]
     pub paths: Vec<PathBuf>,
@@ -25,8 +25,8 @@ pub struct Cli {
 
     /// Required together with a non-loopback --bind to confirm the server
     /// should be reachable from the network (it has no authentication).
-    #[arg(long)]
-    pub dangerously_allow_remote_access: bool,
+    #[arg(long = "dangerously-allow-remote")]
+    pub allow_remote: bool,
 
     /// Do not automatically open the browser.
     #[arg(long)]

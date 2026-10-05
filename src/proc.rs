@@ -36,7 +36,7 @@ pub fn spawn_background(
         args.push(target);
     }
     if allow_remote_access {
-        args.push("--dangerously-allow-remote-access".to_string());
+        args.push("--dangerously-allow-remote".to_string());
     }
     for p in paths {
         args.push(p.to_string_lossy().into_owned());

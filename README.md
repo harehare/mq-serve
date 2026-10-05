@@ -61,7 +61,12 @@ mq-serve docs/ -p 8080
 
 # Bind to all interfaces (e.g. inside Docker) — requires an explicit opt-in,
 # since mq-serve has no authentication and anyone reaching the address can read your files
-mq-serve docs/ --bind 0.0.0.0 --dangerously-allow-remote-access
+mq-serve docs/ --bind 0.0.0.0 --dangerously-allow-remote
+
+# Glob patterns (quote them so the shell does not expand them first).
+# New files that match the pattern are picked up automatically.
+mq-serve "docs/**/*.md"
+mq-serve "notes/*.md" -t "Notes"
 
 # Run in the foreground (e.g. in a container or for debugging)
 mq-serve docs/ --foreground
@@ -119,6 +124,7 @@ mq-serve --restart                    # restart the server (session is preserved
 mq-serve --clear                      # clear the saved session (restarts server if running)
 mq-serve --close old-draft.md         # remove a file/directory from the running session
 mq-serve --unwatch docs/              # alias for --close, for directories you no longer want watched
+mq-serve --close "docs/**/*.md"        # remove a glob pattern (pass it exactly as you added it)
 mq-serve --restart -p 7701            # restart/clear/close on a specific port
 ```
 
@@ -126,7 +132,7 @@ mq-serve --restart -p 7701            # restart/clear/close on a specific port
 
 ```
 Arguments:
-  [FILES_OR_DIRS]...  Markdown files or directories to serve. Defaults to the current directory
+  [FILES_OR_DIRS]...  Markdown files, directories or glob patterns to serve. Defaults to the current directory
 
 Options:
   -t, --target <NAME>
@@ -135,7 +141,7 @@ Options:
           Port to listen on [default: 7700]
   -b, --bind <BIND>
           Address to bind to [default: 127.0.0.1]
-      --dangerously-allow-remote-access
+      --dangerously-allow-remote
           Required together with a non-loopback --bind to confirm the server should be reachable from the network (it has no authentication)
       --no-open
           Do not automatically open the browser

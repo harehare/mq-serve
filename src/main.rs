@@ -1,5 +1,6 @@
 mod cli;
 mod handlers;
+mod paths;
 mod proc;
 mod registry;
 mod server;
@@ -65,7 +66,7 @@ async fn main() {
     let mut paths: Vec<PathBuf> = cli
         .paths
         .iter()
-        .map(|p| p.canonicalize().unwrap_or_else(|_| p.clone()))
+        .map(|p| paths::normalize(p))
         .collect();
 
     if let Some(p) = stdin_path {
@@ -92,9 +93,9 @@ async fn main() {
         return;
     }
 
-    if !is_loopback(&cli.bind) && !cli.dangerously_allow_remote_access {
+    if !is_loopback(&cli.bind) && !cli.allow_remote {
         eprintln!(
-            "mq-serve: refusing to bind to non-loopback address {} without --dangerously-allow-remote-access\n\
+            "mq-serve: refusing to bind to non-loopback address {} without --dangerously-allow-remote\n\
              mq-serve has no authentication; anyone who can reach this address can read your files.",
             cli.bind
         );
@@ -111,7 +112,7 @@ async fn main() {
             cli.no_open,
             cli.no_watch,
             cli.target.clone(),
-            cli.dangerously_allow_remote_access,
+            cli.allow_remote,
         )
         .await
         {
@@ -125,7 +126,7 @@ async fn main() {
             cli.no_watch,
             &paths,
             cli.target.clone(),
-            cli.dangerously_allow_remote_access,
+            cli.allow_remote,
         );
         write_pid_file(cli.port, pid);
 
@@ -207,7 +208,7 @@ async fn add_paths_to_server(
 async fn remove_paths_from_server(url: &str, paths: &[PathBuf]) -> Result<(), String> {
     let path_strings: Vec<String> = paths
         .iter()
-        .map(|p| p.canonicalize().unwrap_or_else(|_| p.clone()))
+        .map(|p| paths::normalize(p))
         .map(|p| p.to_string_lossy().into_owned())
         .collect();
 
