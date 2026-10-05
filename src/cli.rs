@@ -61,7 +61,12 @@ pub struct Cli {
     #[arg(long)]
     pub status: bool,
 
-    /// Output --status as JSON instead of human-readable text.
+    /// Run an mq query against the given files/directories/glob patterns and
+    /// print the result to stdout instead of starting a server.
+    #[arg(long, short = 'q', value_name = "QUERY")]
+    pub query: Option<String>,
+
+    /// Output --status or --query results as JSON instead of human-readable text.
     #[arg(long)]
     pub json: bool,
 

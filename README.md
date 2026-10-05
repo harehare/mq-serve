@@ -173,6 +173,25 @@ Options:
           Print version
 ```
 
+## Querying from the CLI
+
+`-q/--query` runs an mq query without starting a server and prints the result to stdout. It accepts the same files, directories and glob patterns as the server, or piped stdin.
+
+```bash
+mq-serve -q '.h' docs/                    # headings of every file under docs/
+mq-serve -q '.code' "docs/**/*.md" --json # JSON: [{ "path", "name", "result" }, ...]
+cat notes.md | mq-serve -q '.h1'
+```
+
+Files for which the query produces no output are skipped. The exit status is 1 if the query is invalid.
+
+The running server exposes the same thing over HTTP:
+
+| Endpoint | Body | Effect |
+| -------- | ---- | ------ |
+| `POST /api/query` | `{ "path": "...", "query": "..." }` or `{ "content": "...", "query": "..." }` | Query one served file or raw Markdown |
+| `POST /api/query-all` | `{ "query": "..." }` | Query every served file |
+
 ## mq Query Examples
 
 | Query            | Effect                                    |

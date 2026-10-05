@@ -2,6 +2,7 @@ mod cli;
 mod handlers;
 mod paths;
 mod proc;
+mod query;
 mod registry;
 mod server;
 mod session;
@@ -31,6 +32,11 @@ async fn main() {
 
     if cli.status {
         show_status(cli.json).await;
+        return;
+    }
+
+    if let Some(query) = &cli.query {
+        run_cli_query(&cli.paths, query, cli.json);
         return;
     }
 
@@ -139,6 +145,47 @@ async fn main() {
             let _ = std::fs::remove_file(pid_file_path(cli.port));
             eprintln!("mq-serve: server did not start in time");
             std::process::exit(1);
+        }
+    }
+}
+
+/// Runs `query` against the given roots (the current directory when none are
+/// given, or piped stdin) and prints the results. Exits with status 1 if the
+/// query fails.
+fn run_cli_query(paths: &[PathBuf], query: &str, json: bool) {
+    let mut roots: Vec<PathBuf> = paths.iter().map(|p| paths::normalize(p)).collect();
+    if let Some(stdin) = read_stdin_to_tempfile() {
+        roots.push(stdin);
+    }
+    if roots.is_empty() {
+        roots.push(std::env::current_dir().unwrap_or_default());
+    }
+
+    let multi = query::query_files(&roots, query);
+    if let Some(error) = &multi.error {
+        eprintln!("mq-serve: {}", error);
+        std::process::exit(1);
+    }
+
+    if json {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&multi.results).unwrap_or_default()
+        );
+        return;
+    }
+
+    let show_names = multi.results.len() > 1;
+    for (i, file) in multi.results.iter().enumerate() {
+        if show_names {
+            if i > 0 {
+                println!();
+            }
+            println!("==> {} <==", file.path);
+        }
+        print!("{}", file.result);
+        if !file.result.ends_with('\n') {
+            println!();
         }
     }
 }

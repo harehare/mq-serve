@@ -20,13 +20,13 @@ use axum::{
     http::{StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
-use miette::miette;
 use notify::{RecommendedWatcher, RecursiveMode, Watcher};
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 use tracing::debug;
 
+use crate::query::{execute_query, query_files};
 use crate::session::save_session;
 use crate::watcher::collect_markdown_files;
 
@@ -306,11 +306,11 @@ pub struct FileQuery {
     pub path: String,
 }
 
-pub async fn get_file(
-    State(state): State<Arc<AppState>>,
-    Query(params): Query<FileQuery>,
+async fn read_allowed_file(
+    state: &AppState,
+    path: &str,
 ) -> Result<String, (StatusCode, String)> {
-    let path = PathBuf::from(&params.path);
+    let path = PathBuf::from(path);
     let paths = state.paths.read().unwrap().clone();
     let path_check = path.clone();
 
@@ -328,11 +328,23 @@ pub async fn get_file(
         .map_err(|e| (StatusCode::NOT_FOUND, e.to_string()))
 }
 
+pub async fn get_file(
+    State(state): State<Arc<AppState>>,
+    Query(params): Query<FileQuery>,
+) -> Result<String, (StatusCode, String)> {
+    read_allowed_file(&state, &params.path).await
+}
+
 // ── POST /api/query ───────────────────────────────────────────────────────────
 
 #[derive(Deserialize)]
 pub struct QueryRequest {
-    pub content: String,
+    /// Markdown to query. Takes precedence over `path`.
+    #[serde(default)]
+    pub content: Option<String>,
+    /// A served file to query, as listed by /api/files.
+    #[serde(default)]
+    pub path: Option<String>,
     pub query: String,
 }
 
@@ -344,8 +356,37 @@ pub struct QueryResponse {
     pub error: Option<String>,
 }
 
-pub async fn run_query(Json(req): Json<QueryRequest>) -> Response {
-    let result = tokio::task::spawn_blocking(move || execute_query(&req.content, &req.query)).await;
+fn query_error(status: StatusCode, error: String) -> Response {
+    (
+        status,
+        Json(QueryResponse {
+            result: None,
+            error: Some(error),
+        }),
+    )
+        .into_response()
+}
+
+pub async fn run_query(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<QueryRequest>,
+) -> Response {
+    let content = match (req.content, req.path) {
+        (Some(content), _) => content,
+        (None, Some(path)) => match read_allowed_file(&state, &path).await {
+            Ok(content) => content,
+            Err((status, msg)) => return query_error(status, msg),
+        },
+        (None, None) => {
+            return query_error(
+                StatusCode::BAD_REQUEST,
+                "either `content` or `path` is required".into(),
+            );
+        }
+    };
+
+    let query = req.query;
+    let result = tokio::task::spawn_blocking(move || execute_query(&content, &query)).await;
 
     match result {
         Ok(Ok(result)) => Json(QueryResponse {
@@ -362,37 +403,21 @@ pub async fn run_query(Json(req): Json<QueryRequest>) -> Response {
     }
 }
 
-fn execute_query(content: &str, query: &str) -> miette::Result<String> {
-    let mut engine = mq_lang::DefaultEngine::default();
-    engine.load_builtin_module();
-    let input = mq_lang::parse_markdown_input(content)?;
-    let runtime_values = engine
-        .eval(query, input.into_iter())
-        .map_err(|e| miette!("Query error: {}", e))?;
-    let nodes: Vec<mq_markdown::Node> = runtime_values
-        .values()
-        .iter()
-        .flat_map(runtime_value_to_nodes)
-        .collect();
-    Ok(mq_markdown::Markdown::new(nodes).to_string())
+// ── POST /api/query-all ───────────────────────────────────────────────────────
+
+#[derive(Deserialize)]
+pub struct QueryAllRequest {
+    pub query: String,
 }
 
-fn runtime_value_to_nodes(value: &mq_lang::RuntimeValue) -> Vec<mq_markdown::Node> {
-    match value {
-        mq_lang::RuntimeValue::Markdown(node, _) => vec![(**node).clone()],
-        mq_lang::RuntimeValue::Array(items) => {
-            let has_markdown = items
-                .iter()
-                .any(|v| matches!(v, mq_lang::RuntimeValue::Markdown(_, _)));
-            if has_markdown {
-                items.iter().flat_map(runtime_value_to_nodes).collect()
-            } else if items.is_empty() {
-                vec![]
-            } else {
-                vec![value.to_string().into()]
-            }
-        }
-        _ => vec![value.to_string().into()],
+pub async fn run_query_all(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<QueryAllRequest>,
+) -> Response {
+    let paths = state.paths.read().unwrap().clone();
+    match tokio::task::spawn_blocking(move || query_files(&paths, &req.query)).await {
+        Ok(result) => Json(result).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
 }
 

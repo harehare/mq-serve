@@ -16,7 +16,7 @@ use tracing::info;
 use crate::{
     handlers::{
         AppState, add_files, get_file, get_status, list_files, remove_files, restart, run_query,
-        search_files, serve_asset, ws_handler,
+        run_query_all, search_files, serve_asset, ws_handler,
     },
     registry,
     session::{load_session, save_session},
@@ -102,6 +102,7 @@ pub async fn start(
         .route("/api/files", get(list_files))
         .route("/api/file", get(get_file))
         .route("/api/query", post(run_query))
+        .route("/api/query-all", post(run_query_all))
         .route("/api/search", post(search_files))
         .route("/api/restart", post(restart))
         .route("/ws", get(ws_handler))
