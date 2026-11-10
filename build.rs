@@ -1,6 +1,14 @@
+use std::path::Path;
 use std::process::Command;
 
 fn main() {
+    // The published crate ships the prebuilt `assets/dist` and excludes the
+    // frontend sources, so there is nothing to build (and build scripts must
+    // not modify the source directory during `cargo publish` verification).
+    if !Path::new("frontend").is_dir() {
+        return;
+    }
+
     println!("cargo:rerun-if-changed=frontend/src");
     println!("cargo:rerun-if-changed=frontend/index.html");
     println!("cargo:rerun-if-changed=vite.config.ts");
