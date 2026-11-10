@@ -40,6 +40,16 @@ pub struct Cli {
     #[arg(long)]
     pub no_watch: bool,
 
+    /// Do not skip files excluded by .gitignore and other ignore rules.
+    /// Applies to the server being started, not one that is already running.
+    #[arg(long)]
+    pub no_ignore: bool,
+
+    /// Do not descend into subdirectories of directory arguments.
+    /// Applies to the server being started, not one that is already running.
+    #[arg(long)]
+    pub no_recursive: bool,
+
     /// Run in the foreground instead of the background (default is background).
     #[arg(long, short = 'f')]
     pub foreground: bool,

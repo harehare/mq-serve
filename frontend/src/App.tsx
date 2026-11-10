@@ -7,6 +7,7 @@ import { renderMarkdown, type ParseResult } from './lib/markdown'
 import { preprocessMdx } from './lib/mdx'
 import { isTrivial, pushHistory, readUrlQuery, syncUrl, toggleSaved } from './lib/queries'
 import { getTheme, applyTheme } from './lib/themes'
+import { groupsForSlug, slugFromLocation } from './lib/groups'
 import QueryBar from './components/QueryBar'
 import Toolbar from './components/Toolbar'
 import Sidebar from './components/Sidebar'
@@ -46,11 +47,21 @@ export default function App() {
   const [inMemoryFiles, setInMemoryFiles] = useState<InMemoryFile[]>([])
   const [isLoading, setIsLoading] = useState(false)
   const [changeTick, setChangeTick] = useState(0)
+  const [groupSlugState, setGroupSlugState] = useState<string | null>(slugFromLocation)
   const rawContentRef = useRef(rawContent)
   useEffect(() => { rawContentRef.current = rawContent }, [rawContent])
   const [systemPrefersDark, setSystemPrefersDark] = useState(
     () => window.matchMedia('(prefers-color-scheme: dark)').matches
   )
+
+  useEffect(() => {
+    const onPop = () => setGroupSlugState(slugFromLocation())
+    window.addEventListener('popstate', onPop)
+    return () => window.removeEventListener('popstate', onPop)
+  }, [])
+
+  const visibleGroups = groupsForSlug(groups, groupSlugState)
+  const scopedGroup = groupSlugState !== null && visibleGroups.length !== groups.length
 
   const debouncedQuery = useDebounce(session.query, 350)
 
@@ -103,7 +114,7 @@ export default function App() {
         const data = await res.json() as { groups: FileGroup[] }
         setGroups(data.groups)
 
-        const allFiles = data.groups.flatMap((g) => g.files)
+        const allFiles = groupsForSlug(data.groups, slugFromLocation()).flatMap((g) => g.files)
         if (allFiles.length === 0) return
 
         const savedPath = session.currentPath
@@ -362,7 +373,8 @@ export default function App() {
         onRestart={handleRestart}
       />
       <Sidebar
-        groups={groups}
+        groups={visibleGroups}
+        scoped={scopedGroup}
         inMemoryFiles={inMemoryFiles}
         currentPath={session.currentPath}
         onFileSelect={loadFile}

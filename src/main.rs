@@ -16,7 +16,7 @@ use std::{
 
 use clap::Parser;
 use cli::Cli;
-use proc::{kill_pid, pid_file_path, spawn_background, write_pid_file};
+use proc::{SpawnOptions, kill_pid, pid_file_path, spawn_background, write_pid_file};
 use serde::Serialize;
 use session::session_file_path;
 use tracing_subscriber::{EnvFilter, fmt, layer::SubscriberExt, util::SubscriberInitExt};
@@ -34,6 +34,8 @@ async fn main() {
         show_status(cli.json).await;
         return;
     }
+
+    watcher::configure_scan(cli.no_ignore, cli.no_recursive);
 
     if let Some(query) = &cli.query {
         run_cli_query(&cli.paths, query, cli.json);
@@ -120,6 +122,8 @@ async fn main() {
             cli.no_watch,
             cli.target.clone(),
             cli.allow_remote,
+            cli.no_ignore,
+            cli.no_recursive,
         )
         .await
         {
@@ -127,14 +131,16 @@ async fn main() {
             std::process::exit(1);
         }
     } else {
-        let pid = spawn_background(
-            cli.port,
-            &cli.bind,
-            cli.no_watch,
-            &paths,
-            cli.target.clone(),
-            cli.allow_remote,
-        );
+        let pid = spawn_background(&SpawnOptions {
+            port: cli.port,
+            bind: &cli.bind,
+            no_watch: cli.no_watch,
+            no_ignore: cli.no_ignore,
+            no_recursive: cli.no_recursive,
+            allow_remote_access: cli.allow_remote,
+            paths: &paths,
+            target: cli.target.clone(),
+        });
         write_pid_file(cli.port, pid);
 
         if wait_for_server(&url, 8).await {

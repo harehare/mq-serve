@@ -1,13 +1,16 @@
 import { useState } from 'react'
-import { Search, List, GitBranch } from 'lucide-react'
+import { Search, List, GitBranch, ArrowLeft } from 'lucide-react'
 import type { FileGroup, SearchResult, Session } from '../../types'
 import FileGroupComponent from './FileGroup'
 import SearchPanel from './SearchPanel'
+import { navigateToGroup } from '../../lib/groups'
 
 interface InMemoryFile { name: string; content: string }
 
 interface Props {
   groups: FileGroup[]
+  /** True when only one group is shown because the URL is `/<group>`. */
+  scoped: boolean
   inMemoryFiles: InMemoryFile[]
   currentPath: string | null
   onFileSelect: (path: string) => void
@@ -18,7 +21,7 @@ interface Props {
 }
 
 export default function Sidebar({
-  groups, inMemoryFiles, currentPath, onFileSelect,
+  groups, scoped, inMemoryFiles, currentPath, onFileSelect,
   session, onSessionUpdate, searchResults, onSearch,
 }: Props) {
   const [showSearch, setShowSearch] = useState(false)
@@ -30,6 +33,15 @@ export default function Sidebar({
   return (
     <nav className="sidebar">
       <div className="sidebar-header">
+        {scoped && (
+          <button
+            className="bar-btn icon-btn"
+            onClick={() => navigateToGroup(null)}
+            title="Show all groups"
+          >
+            <ArrowLeft size={15} />
+          </button>
+        )}
         <button
           className={`bar-btn icon-btn ${showSearch ? 'active' : ''}`}
           onClick={() => setShowSearch((v) => !v)}
@@ -66,6 +78,7 @@ export default function Sidebar({
             session={session}
             onSessionUpdate={onSessionUpdate}
             onFileSelect={onFileSelect}
+            linkable={!scoped && groups.length > 1}
           />
         ))}
 
