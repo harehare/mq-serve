@@ -154,6 +154,10 @@ Options:
           Disable file-change watching
   -w, --watch <PATTERN>...
           Add one or more files, directories or glob patterns to watch. Same as passing them as positional arguments, but unambiguous for quoted patterns such as --watch "docs/**/*.md"
+      --no-ignore
+          Do not skip files excluded by .gitignore and other ignore rules
+      --no-recursive
+          Do not descend into subdirectories of directory arguments
   -f, --foreground
           Run in the foreground instead of the background (default is background)
       --stop
@@ -177,6 +181,12 @@ Options:
   -V, --version
           Print version
 ```
+
+### Group URLs
+
+Each `--target` group (or root, when unnamed) has its own URL: `http://localhost:7700/docs` shows only the group named `Docs` in the sidebar. Use the link icon next to a group name, or the back arrow in the sidebar header to return to all groups.
+
+`--no-ignore` and `--no-recursive` are applied when a server starts (and to `--query`); they do not change a server that is already running.
 
 ## Querying from the CLI
 

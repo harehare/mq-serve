@@ -20,7 +20,7 @@ use axum::{
     http::{StatusCode, Uri, header},
     response::{IntoResponse, Response},
 };
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{RecommendedWatcher, Watcher};
 use rust_embed::RustEmbed;
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
@@ -28,7 +28,7 @@ use tracing::debug;
 
 use crate::query::{execute_query, query_files};
 use crate::session::save_session;
-use crate::watcher::collect_markdown_files;
+use crate::watcher::{collect_markdown_files, recursive_mode};
 
 #[derive(RustEmbed)]
 #[folder = "assets/dist/"]
@@ -74,6 +74,8 @@ pub struct AppState {
     /// Needed to spawn a replacement process on /api/restart.
     pub bind: String,
     pub no_watch: bool,
+    pub no_ignore: bool,
+    pub no_recursive: bool,
     pub allow_remote_access: bool,
 }
 
@@ -131,7 +133,7 @@ pub async fn add_files(
                 paths.push(p.clone());
                 if let Some(watcher) = &state.watcher {
                     let mut w = watcher.lock().unwrap();
-                    let _ = w.watch(&crate::paths::watch_target(p), RecursiveMode::Recursive);
+                    let _ = w.watch(&crate::paths::watch_target(p), recursive_mode(p));
                 }
             }
         }
@@ -482,11 +484,21 @@ pub async fn restart(State(state): State<Arc<AppState>>) -> StatusCode {
     let bind = state.bind.clone();
     let no_watch = state.no_watch;
     let allow_remote_access = state.allow_remote_access;
+    let no_ignore = state.no_ignore;
+    let no_recursive = state.no_recursive;
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(200)).await;
         crate::registry::unregister(port);
-        let pid =
-            crate::proc::spawn_background(port, &bind, no_watch, &[], None, allow_remote_access);
+        let pid = crate::proc::spawn_background(&crate::proc::SpawnOptions {
+            port,
+            bind: &bind,
+            no_watch,
+            no_ignore,
+            no_recursive,
+            allow_remote_access,
+            paths: &[],
+            target: None,
+        });
         crate::proc::write_pid_file(port, pid);
         std::process::exit(0);
     });

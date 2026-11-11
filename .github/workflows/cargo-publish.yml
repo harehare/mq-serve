@@ -27,9 +27,13 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v2.0.0
         with:
           cache: false
+      - name: Build frontend
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm run build
       - uses: rust-lang/crates-io-auth-action@v1.0.6
         id: auth
       - name: Publish
-        run: cargo publish
+        run: cargo publish --allow-dirty
         env:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}

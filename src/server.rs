@@ -36,6 +36,8 @@ pub async fn start(
     no_watch: bool,
     target: Option<String>,
     allow_remote_access: bool,
+    no_ignore: bool,
+    no_recursive: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if !is_loopback(bind) && !allow_remote_access {
         return Err(format!(
@@ -67,6 +69,8 @@ pub async fn start(
         }
     }
 
+    crate::watcher::configure_scan(no_ignore, no_recursive);
+
     let (watch_tx, _) = broadcast::channel::<String>(128);
 
     let watcher = if !no_watch {
@@ -89,6 +93,8 @@ pub async fn start(
         port,
         bind: bind.to_string(),
         no_watch,
+        no_ignore,
+        no_recursive,
         allow_remote_access,
     });
 

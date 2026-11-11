@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { ChevronDown, ChevronRight, Heading, Type } from 'lucide-react'
+import { ChevronDown, ChevronRight, ExternalLink, Heading, Type } from 'lucide-react'
 import {
   DndContext,
   closestCenter,
@@ -18,6 +18,7 @@ import {
 import type { FileGroup as FileGroupType, Session } from '../../types'
 import FileItem from './FileItem'
 import { buildTree, TreeNodeView } from './TreeNode'
+import { groupSlug, navigateToGroup } from '../../lib/groups'
 
 interface Props {
   group: FileGroupType
@@ -25,9 +26,11 @@ interface Props {
   session: Session
   onSessionUpdate: (partial: Partial<Session>) => void
   onFileSelect: (path: string) => void
+  /** Show a button that opens this group on its own URL. */
+  linkable: boolean
 }
 
-export default function FileGroup({ group, currentPath, session, onSessionUpdate, onFileSelect }: Props) {
+export default function FileGroup({ group, currentPath, session, onSessionUpdate, onFileSelect, linkable }: Props) {
   const [collapsed, setCollapsed] = useState(false)
 
   const sensors = useSensors(
@@ -69,6 +72,15 @@ export default function FileGroup({ group, currentPath, session, onSessionUpdate
           {collapsed ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
           <span className="group-name" title={group.root}>{group.name}</span>
         </button>
+        {linkable && groupSlug(group.name) && (
+          <button
+            className="group-label-toggle"
+            onClick={() => navigateToGroup(groupSlug(group.name))}
+            title={`Open only this group (/${groupSlug(group.name)})`}
+          >
+            <ExternalLink size={12} />
+          </button>
+        )}
         <button
           className="group-label-toggle"
           onClick={toggleLabel}
