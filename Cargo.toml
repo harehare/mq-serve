@@ -14,7 +14,7 @@ include = [
   "/assets/dist/**",
   "/README.md",
 ]
-version = "0.1.25"
+version = "0.1.26"
 
 [[bin]]
 name = "mq-serve"
@@ -26,8 +26,8 @@ clap = {version = "4", features = ["derive"]}
 ignore = "0.4"
 miette = "7"
 mime_guess = "2"
-mq-lang = "0.10.1"
-mq-markdown = "0.10.1"
+mq-lang = "0.10.2"
+mq-markdown = "0.10.2"
 notify = "8"
 open = "5"
 rayon = "1"
